@@ -19,6 +19,8 @@ def encoded(value):
 
 
 def atomic_write(path, data):
+    if path.exists() and path.read_bytes() == data:
+        return
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
         temp = Path(handle.name)
         try:
@@ -29,10 +31,10 @@ def atomic_write(path, data):
             temp.unlink(missing_ok=True)
 
 
-def export_snapshot(graph):
+def export_snapshot(graph, *, output_dir=None):
     refreshed = graph.index()
-    folder = graph.repo / '.codemanager' / 'index'
-    folder.mkdir(exist_ok=True)
+    folder = Path(output_dir) if output_dir is not None else graph.repo / '.codemanager' / 'index'
+    folder.mkdir(parents=True, exist_ok=True)
     shards = []
     chunk = bytearray()
 

@@ -17,12 +17,13 @@ def terms(text):
 
 
 class Graph:
-    def __init__(self, repo):
+    def __init__(self, repo, *, load_snapshot=True, use_git=True, cache_dir=None):
+        self.use_git = use_git
         self.repo = Path(repo).resolve(strict=True)
         if not self.repo.is_dir():
             raise ValueError('Repository must be a directory')
-        folder = self.repo / '.codemanager'
-        folder.mkdir(exist_ok=True)
+        folder = Path(cache_dir) if cache_dir is not None else self.repo / '.codemanager'
+        folder.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(folder / 'graph.sqlite3', timeout=30)
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''
@@ -39,7 +40,8 @@ class Graph:
             CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(id UNINDEXED, name, path, body);
         ''')
         try:
-            self.load_bundled_snapshot()
+            if load_snapshot:
+                self.load_bundled_snapshot()
         except Exception:
             self.db.close()
             raise
@@ -66,8 +68,8 @@ class Graph:
 
     def paths(self):
         # Git supplies tracked and untracked files while respecting gitignore.
-        result = subprocess.run(['git', '-C', str(self.repo), 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], capture_output=True)
-        if result.returncode == 0:
+        result = subprocess.run(['git', '-C', str(self.repo), 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], capture_output=True) if self.use_git else None
+        if result is not None and result.returncode == 0:
             paths = (Path(os.fsdecode(p)) for p in result.stdout.split(b'\0') if p)
         else:
             candidates = []
@@ -165,17 +167,18 @@ class Graph:
             deleted = [r[0] for r in self.db.execute('SELECT path FROM files') if r[0] not in seen]
             for path in deleted:
                 self.remove(path)
-            # Rebuild resolution after every update, including newly added targets.
-            self.db.execute("DELETE FROM edges WHERE kind != 'contains'")
-            for ref in self.db.execute('SELECT refs.*, nodes.path FROM refs JOIN nodes ON nodes.id=refs.source').fetchall():
-                if ref['kind'] == 'calls':
-                    # Only a unique same-file top-level definition is a candidate.
-                    targets = self.db.execute("SELECT id FROM nodes WHERE path=? AND name=? AND kind IN ('function','class')", (ref['path'], ref['name'])).fetchall()
-                else:
-                    module = ref['name'].replace('.', '/')
-                    targets = self.db.execute("SELECT id FROM nodes WHERE kind='file' AND (path=? OR path=?)", (module+'.py', module+'/__init__.py')).fetchall()
-                if len(targets) == 1:
-                    self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (ref['source'], targets[0]['id'], ref['kind']+'_candidate'))
+            # Resolve links only when sources changed; polling unchanged code is read-only.
+            if changed or deleted:
+                self.db.execute("DELETE FROM edges WHERE kind != 'contains'")
+                for ref in self.db.execute('SELECT refs.*, nodes.path FROM refs JOIN nodes ON nodes.id=refs.source').fetchall():
+                    if ref['kind'] == 'calls':
+                        # Only a unique same-file top-level definition is a candidate.
+                        targets = self.db.execute("SELECT id FROM nodes WHERE path=? AND name=? AND kind IN ('function','class')", (ref['path'], ref['name'])).fetchall()
+                    else:
+                        module = ref['name'].replace('.', '/')
+                        targets = self.db.execute("SELECT id FROM nodes WHERE kind='file' AND (path=? OR path=?)", (module+'.py', module+'/__init__.py')).fetchall()
+                    if len(targets) == 1:
+                        self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (ref['source'], targets[0]['id'], ref['kind']+'_candidate'))
         return {**self.stats(), 'changed_files': changed, 'deleted_files': len(deleted), 'unreadable_files': warnings}
 
     def remove(self, path):
