@@ -11,7 +11,7 @@ import tempfile
 import time
 
 from .graph import EXTENSIONS, SKIP, Graph
-from .snapshot import SHARD_BYTES
+from .snapshot import SHARD_BYTES, is_shard_name
 
 
 def interval_seconds(value):
@@ -120,6 +120,9 @@ def bundled_bytes(repo):
             if len(data) > SHARD_BYTES or len(data) != shard['bytes'] or hashlib.sha256(data).hexdigest() != digest:
                 raise ValueError('Invalid snapshot shard checksum or size')
             result[name] = data
+        obsolete = [p.name for p in folder.glob('*.jsonl') if is_shard_name(p.name) and p.name not in result]
+        if obsolete:
+            raise ValueError('Obsolete graph shards found. Run export and stage .codemanager/index/ including deletions')
         return result
     except (KeyError, TypeError, OSError) as exc:
         raise ValueError(f'Invalid graph snapshot: {exc}') from exc

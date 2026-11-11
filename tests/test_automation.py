@@ -81,6 +81,17 @@ class AutomationTests(unittest.TestCase):
         self.git('add', '.codemanager/index')
         self.assertTrue(check_snapshot(self.repo, staged=True)['valid'])
 
+    def test_staged_check_rejects_obsolete_shards(self):
+        self.export()
+        folder = self.repo / '.codemanager' / 'index'
+        (folder / ('0'*64 + '.jsonl')).write_text('obsolete')
+        self.git('add', '.')
+        with self.assertRaisesRegex(ValueError, 'Obsolete graph shards'):
+            check_snapshot(self.repo, staged=True)
+        self.export()
+        self.git('add', '.codemanager/index')
+        self.assertTrue(check_snapshot(self.repo, staged=True)['valid'])
+
     def test_existing_hook_and_custom_hooks_path_are_preserved(self):
         hook = self.repo / '.git' / 'hooks' / 'pre-commit'
         hook.write_text('#!/bin/sh\necho existing\n')

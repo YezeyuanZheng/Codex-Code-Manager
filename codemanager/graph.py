@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sqlite3
 import subprocess
+from .locking import snapshot_lock
 
 SKIP = {'.git', '.codemanager', '.venv', 'venv', 'node_modules', '__pycache__', 'dist', 'build', '.next', 'vendor'}
 EXTENSIONS = {'.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.rs', '.java', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.swift', '.kt', '.scala', '.sh', '.sql', '.md', '.toml', '.yaml', '.yml', '.json', '.vue', '.svelte'}
@@ -24,6 +25,7 @@ class Graph:
             raise ValueError('Repository must be a directory')
         folder = Path(cache_dir) if cache_dir is not None else self.repo / '.codemanager'
         folder.mkdir(parents=True, exist_ok=True)
+        self.cache_dir = folder
         self.db = sqlite3.connect(folder / 'graph.sqlite3', timeout=30)
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''
@@ -47,6 +49,10 @@ class Graph:
             raise
 
     def load_bundled_snapshot(self):
+        with snapshot_lock(self.cache_dir):
+            self._load_bundled_snapshot()
+
+    def _load_bundled_snapshot(self):
         manifest = self.repo / '.codemanager' / 'index' / 'manifest.json'
         if not manifest.exists():
             return

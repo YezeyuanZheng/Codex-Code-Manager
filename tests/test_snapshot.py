@@ -105,6 +105,44 @@ class SnapshotTests(unittest.TestCase):
         finally:
             graph.close()
 
+    def test_export_keeps_only_current_graph_and_git_preserves_history(self):
+        def git(*args):
+            return subprocess.run(['git', '-C', str(self.root), *args],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+
+        git('init', '-q')
+        git('config', 'user.name', 'Test')
+        git('config', 'user.email', 'test@example.com')
+        git('config', 'commit.gpgsign', 'false')
+        (self.root / '.gitignore').write_text('.codemanager/*\n!.codemanager/index/\n')
+        self.graph.export()
+        folder = self.root / '.codemanager' / 'index'
+        first = json.loads((folder / 'manifest.json').read_text())
+        old_shard = first['shards'][0]['file']
+        old_data = (folder / old_shard).read_text()
+        git('add', '.')
+        git('commit', '-qm', 'Original source and graph')
+        old_commit = git('rev-parse', 'HEAD')
+        (folder / 'notes.jsonl').write_text('User notes, not a generated shard')
+        (self.root / 'app.py').write_text('def replacement():\n    return 3\n')
+        self.graph.export()
+        current = json.loads((folder / 'manifest.json').read_text())
+        self.assertFalse((folder / old_shard).exists())
+        self.assertTrue((folder / 'notes.jsonl').exists())
+        self.assertEqual({p.name for p in folder.glob('*.jsonl') if p.name != 'notes.jsonl'},
+                         {shard['file'] for shard in current['shards']})
+        git('add', '-A')
+        git('commit', '-qm', 'Updated source and graph')
+        self.assertEqual(git('show', old_commit+':.codemanager/index/'+old_shard), old_data.strip())
+        git('checkout', '-q', old_commit)
+        # Reuse a cache that previously contained the newer code.
+        graph = Graph(self.root)
+        try:
+            self.assertTrue(graph.search('authenticate')['results'])
+            self.assertFalse(graph.search('replacement')['results'])
+        finally:
+            graph.close()
+
     def test_corrupt_bundle_does_not_replace_cache(self):
         self.graph.export()
         expected = self.graph.stats()

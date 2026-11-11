@@ -78,11 +78,15 @@ files larger than 50 MiB and blocks files larger than 100 MiB; our 1 MiB shard
 limit stays below those thresholds. Total snapshot size and Git history still grow
 with the project. See [GitHub's file size documentation](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github).
 
-Exports retain older content-addressed shards to avoid disrupting a concurrent
-reader. Only the files listed in `manifest.json` are loaded. Unreferenced shards
-can be removed when no other process is loading the bundle. Exported metadata
-covers the local indexed working tree, including nonignored untracked files;
-commit matching source files and avoid exporting unrelated local work.
+Each commit contains the graph for its own source version. Export removes obsolete
+content-addressed shards from the working tree; Git history preserves the older
+snapshots alongside their corresponding source commits. No separate graph history
+is kept in the current tree. Stage `.codemanager/index/` including deletions when
+committing. Commit checks reject leftover obsolete shards. Snapshot loading and
+publishing share a local file lock, so a publisher cannot remove shards while
+another helper is loading them. Exported metadata covers the local indexed working
+tree, including nonignored untracked files; commit matching source files and avoid
+exporting unrelated local work.
 
 ## Use from Codex
 

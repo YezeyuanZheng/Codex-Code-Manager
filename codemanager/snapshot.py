@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import tempfile
+from .locking import snapshot_lock
 
 FORMAT = 1
 SHARD_BYTES = 1024 * 1024
@@ -12,6 +13,11 @@ TABLES = {
     'edges': ('source', 'target', 'kind'),
     'refs': ('source', 'name', 'kind'),
 }
+
+
+def is_shard_name(name):
+    return (name.endswith('.jsonl') and len(name) == 70
+            and all(c in '0123456789abcdef' for c in name[:-6]))
 
 
 def encoded(value):
@@ -32,6 +38,11 @@ def atomic_write(path, data):
 
 
 def export_snapshot(graph, *, output_dir=None):
+    with snapshot_lock(graph.cache_dir):
+        return _export_snapshot(graph, output_dir=output_dir)
+
+
+def _export_snapshot(graph, *, output_dir=None):
     refreshed = graph.index()
     folder = Path(output_dir) if output_dir is not None else graph.repo / '.codemanager' / 'index'
     folder.mkdir(parents=True, exist_ok=True)
@@ -61,7 +72,11 @@ def export_snapshot(graph, *, output_dir=None):
         flush()
     manifest = encoded({'format': FORMAT, 'shards': shards})
     atomic_write(folder / 'manifest.json', manifest)
-    # Old content-addressed shards are harmless; keep them until an explicit cleanup.
+    # Each Git tree contains its current graph; Git history preserves older graphs.
+    current = {shard['file'] for shard in shards}
+    for path in folder.glob('*.jsonl'):
+        if is_shard_name(path.name) and path.name not in current and (path.is_file() or path.is_symlink()):
+            path.unlink(missing_ok=True)
     return {'snapshot': '.codemanager/index/manifest.json',
             'shards': len(shards), 'bytes': len(manifest) + sum(s['bytes'] for s in shards),
             'refreshed': refreshed}
