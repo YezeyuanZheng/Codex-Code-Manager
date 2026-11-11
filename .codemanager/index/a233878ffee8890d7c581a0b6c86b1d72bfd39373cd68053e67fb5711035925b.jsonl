@@ -1,0 +1,4 @@
+{"table":"files","values":["AGENTS.md","c2079c6e92710a1636d7d10eb37484038e3b0220e0dce8d5475388b61436e3c8"]}
+{"table":"nodes","values":["AGENTS.md:1:AGENTS.md","AGENTS.md","AGENTS.md","file",1,28]}
+{"table":"nodes","values":["AGENTS.md:1:chunk_1","AGENTS.md","chunk_1","chunk",1,28]}
+{"table":"edges","values":["AGENTS.md:1:AGENTS.md","AGENTS.md:1:chunk_1","contains"]}

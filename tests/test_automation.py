@@ -59,6 +59,17 @@ class AutomationTests(unittest.TestCase):
         self.assertTrue(check_snapshot(self.repo)['valid'])
 
     def test_hook_blocks_stale_commit_then_allows_refreshed_commit(self):
+        # A controlled local runtime keeps this subprocess hook test offline.
+        runtime = Path(self.temp.name) / 'test-runtime'
+        package = runtime / 'fastembed'
+        package.mkdir(parents=True)
+        (package / '__init__.py').write_text('class TextEmbedding:\n    def __init__(self, **kwargs): pass\n    def passage_embed(self, texts, **kwargs): return iter([[1.0, 0.0] for text in texts])\n')
+        metadata = runtime / 'fastembed-0.9.1.dist-info'
+        metadata.mkdir()
+        (metadata / 'METADATA').write_text('Metadata-Version: 2.1\nName: fastembed\nVersion: 0.9.1\n')
+        environment = patch.dict(os.environ, {'PYTHONPATH': str(runtime) + os.pathsep + os.environ.get('PYTHONPATH', '')})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.export()
         self.git('add', '.')
         install_hook(self.repo)

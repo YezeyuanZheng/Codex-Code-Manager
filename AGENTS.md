@@ -19,8 +19,10 @@ The MCP server polls and publishes edits automatically while running. Call
 the export command above or run `python -m codemanager watch --repo .`.
 
 Before committing, stage matching source changes and `.codemanager/index/`, then
-run `python -m codemanager check --repo . --staged`. Keep partial staging intact;
+run `python -m codemanager check --repo . --staged --embeddings`. Keep partial staging intact;
 do not stage unrelated user edits to satisfy the graph check. Install the local
 commit check with `python -m codemanager install-hook --repo .` once per clone.
+The hook requires successful regeneration of stale/missing staged embeddings;
+report missing model dependencies rather than bypassing that requirement.
 
 Run `python -m unittest discover -s tests -v` for implementation changes.

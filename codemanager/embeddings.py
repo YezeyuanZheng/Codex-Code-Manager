@@ -95,23 +95,24 @@ def passages(node):
         yield header+body, start, end, body
 
 
-def sync_embeddings(graph, embedder):
+def sync_embeddings(graph, embedder, *, cache_db=None):
     """Refresh only missing/stale passages. Cache identity includes the model version."""
     model = embedder.identity
+    cache = cache_db if cache_db is not None else graph.db
     # File previews repeat chunks or definitions; keep them out of dense retrieval.
     nodes = graph.db.execute("SELECT * FROM nodes WHERE kind!='file' ORDER BY id").fetchall()
     expected = {}
     for node in nodes:
         for chunk, (text, _, _, _) in enumerate(passages(node)):
             expected[(node['id'], chunk)] = (hashlib.sha256(text.encode()).hexdigest(), text)
-    cached = {(row['node_id'], row['chunk']): row['digest'] for row in graph.db.execute(
+    cached = {(row['node_id'], row['chunk']): row['digest'] for row in cache.execute(
         'SELECT node_id,chunk,digest FROM embeddings WHERE model=?', (model,))}
     missing = [(key, digest, text) for key, (digest, text) in expected.items() if cached.get(key) != digest]
-    with graph.db:
+    with cache:
         # Keep a single current model cache, not historical vectors.
-        graph.db.execute('DELETE FROM embeddings WHERE model!=?', (model,))
+        cache.execute('DELETE FROM embeddings WHERE model!=?', (model,))
         for key in cached.keys() - expected.keys():
-            graph.db.execute('DELETE FROM embeddings WHERE node_id=? AND chunk=? AND model=?', (*key, model))
+            cache.execute('DELETE FROM embeddings WHERE node_id=? AND chunk=? AND model=?', (*key, model))
         dimension = None
         for offset in range(0, len(missing), BATCH_SIZE):
             batch = missing[offset:offset+BATCH_SIZE]
@@ -123,7 +124,7 @@ def sync_embeddings(graph, embedder):
                 if dimension is not None and dimension != len(values):
                     raise EmbeddingError('Embedding dimensions changed within a batch')
                 dimension = len(values)
-                graph.db.execute('INSERT OR REPLACE INTO embeddings VALUES (?,?,?,?,?)',
+                cache.execute('INSERT OR REPLACE INTO embeddings VALUES (?,?,?,?,?)',
                                  (ident, chunk, model, digest, pack(values)))
     return {'model': model, 'embedded_passages': len(missing), 'cached_passages': len(expected)}
 

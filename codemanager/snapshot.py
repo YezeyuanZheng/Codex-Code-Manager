@@ -5,7 +5,7 @@ from pathlib import Path, PurePosixPath
 import tempfile
 from .locking import snapshot_lock
 
-FORMAT = 1
+FORMAT = 2
 SHARD_BYTES = 1024 * 1024
 TABLES = {
     'files': ('path', 'digest'),
@@ -37,57 +37,120 @@ def atomic_write(path, data):
             temp.unlink(missing_ok=True)
 
 
-def export_snapshot(graph, *, output_dir=None):
+def bucket_descriptors(info):
+    """Format 2 uses stable path-hash partitions; format 1 remains readable."""
+    if info.get('format') != FORMAT:
+        return {}
+    descriptors = {entry['file']: entry for entry in info['shards']}
+    return {bucket: [descriptors[name] for name in names] for bucket, names in info['buckets'].items()}
+
+
+def reusable_shard(graph, folder, entry):
+    from .graph import file_signature
+    name = entry['file']
+    if not is_shard_name(name) or name != entry['sha256']+'.jsonl':
+        return False
+    path = folder / name
+    if not path.is_file() or path.is_symlink() or path.stat().st_size > SHARD_BYTES:
+        return False
+    signature = file_signature(path)
+    cached = graph.db.execute('SELECT signature FROM shard_state WHERE name=?', (name,)).fetchone()
+    if not cached or cached[0] != signature:
+        data = path.read_bytes()
+        if len(data) > SHARD_BYTES or len(data) != entry['bytes'] or hashlib.sha256(data).hexdigest() != entry['sha256']:
+            return False
+        graph.db.execute('INSERT OR REPLACE INTO shard_state VALUES (?,?)', (name, signature))
+    return True
+
+
+def serialize_bucket(graph, bucket):
+    """Only rows owned by this partition are queried and serialized."""
+    for table, columns in TABLES.items():
+        names = ','.join('t.'+column for column in columns)
+        order = ','.join('t.'+column for column in columns)
+        if table == 'files':
+            sql = f'SELECT {names} FROM files t WHERE bucket=? ORDER BY {order}'
+        elif table == 'nodes':
+            sql = f'SELECT {names} FROM nodes t JOIN files f ON f.path=t.path WHERE f.bucket=? ORDER BY {order}'
+        else:
+            sql = f'SELECT {names} FROM {table} t JOIN nodes n ON n.id=t.source JOIN files f ON f.path=n.path WHERE f.bucket=? ORDER BY {order}'
+        for row in graph.db.execute(sql, (bucket,)):
+            yield encoded({'table': table, 'values': list(row)})
+
+
+def export_snapshot(graph, *, output_dir=None, full=False):
     with snapshot_lock(graph.cache_dir):
-        return _export_snapshot(graph, output_dir=output_dir)
+        return _export_snapshot(graph, output_dir=output_dir, full=full)
 
 
-def _export_snapshot(graph, *, output_dir=None):
-    refreshed = graph.index()
+def _export_snapshot(graph, *, output_dir=None, full=False):
+    from .graph import bucket_for, file_signature
+    refreshed = graph.index(full=full)
     folder = Path(output_dir) if output_dir is not None else graph.repo / '.codemanager' / 'index'
     folder.mkdir(parents=True, exist_ok=True)
-    shards = []
-    chunk = bytearray()
-
-    def flush():
-        if not chunk:
-            return
-        data = bytes(chunk)
-        digest = hashlib.sha256(data).hexdigest()
-        filename = digest + '.jsonl'
-        atomic_write(folder / filename, data)
-        shards.append({'file': filename, 'sha256': digest, 'bytes': len(data)})
-        chunk.clear()
-
+    try:
+        previous = bucket_descriptors(json.loads((folder / 'manifest.json').read_bytes()))
+    except (OSError, ValueError, KeyError, TypeError):
+        previous = {}
+    cached = {row['bucket']: row['descriptors'] for row in graph.db.execute('SELECT * FROM snapshot_buckets')}
+    dirty = {bucket_for(row[0]) for row in graph.db.execute('SELECT path FROM snapshot_dirty')}
+    partitions, written, reused = {}, 0, 0
     with graph.db:
-        for table, columns in TABLES.items():
-            names = ','.join(columns)
-            for row in graph.db.execute(f'SELECT {names} FROM {table} ORDER BY {names}'):
-                line = encoded({'table': table, 'values': list(row)})
+        for (bucket,) in graph.db.execute('SELECT DISTINCT bucket FROM files ORDER BY bucket').fetchall():
+            old = previous.get(bucket)
+            if not full and bucket not in dirty and old is not None and cached.get(bucket) == json.dumps(old, sort_keys=True) and all(reusable_shard(graph, folder, entry) for entry in old):
+                partitions[bucket] = old
+                reused += 1
+                continue
+            entries, chunk = [], bytearray()
+
+            def flush():
+                if not chunk:
+                    return
+                data = bytes(chunk)
+                digest = hashlib.sha256(data).hexdigest()
+                filename = digest + '.jsonl'
+                path = folder / filename
+                atomic_write(path, data)
+                graph.db.execute('INSERT OR REPLACE INTO shard_state VALUES (?,?)', (filename, file_signature(path)))
+                entries.append({'file': filename, 'sha256': digest, 'bytes': len(data)})
+                chunk.clear()
+
+            for line in serialize_bucket(graph, bucket):
                 if len(line) > SHARD_BYTES:
                     raise ValueError('A snapshot record exceeds the 1 MiB shard limit')
                 if len(chunk) + len(line) > SHARD_BYTES:
                     flush()
                 chunk.extend(line)
-        flush()
-    manifest = encoded({'format': FORMAT, 'shards': shards})
-    atomic_write(folder / 'manifest.json', manifest)
-    # Each Git tree contains its current graph; Git history preserves older graphs.
-    current = {shard['file'] for shard in shards}
-    for path in folder.glob('*.jsonl'):
-        if is_shard_name(path.name) and path.name not in current and (path.is_file() or path.is_symlink()):
-            path.unlink(missing_ok=True)
+            flush()
+            partitions[bucket] = entries
+            written += 1
+        shards = [entry for entries in partitions.values() for entry in entries]
+        manifest = encoded({'format': FORMAT, 'buckets': {key: [entry['file'] for entry in value] for key, value in partitions.items()}, 'shards': shards})
+        atomic_write(folder / 'manifest.json', manifest)
+        # Git history owns old versions; the working tree contains only current shards.
+        current = {entry['file'] for entry in shards}
+        for path in folder.glob('*.jsonl'):
+            if is_shard_name(path.name) and path.name not in current and (path.is_file() or path.is_symlink()):
+                path.unlink(missing_ok=True)
+                graph.db.execute('DELETE FROM shard_state WHERE name=?', (path.name,))
+        graph.db.execute('DELETE FROM snapshot_buckets')
+        graph.db.executemany('INSERT INTO snapshot_buckets VALUES (?,?)', ((key, json.dumps(value, sort_keys=True)) for key, value in partitions.items()))
+        graph.db.execute('DELETE FROM snapshot_dirty')
+        if output_dir is None:
+            graph.db.execute("INSERT OR REPLACE INTO metadata VALUES ('snapshot',?)", (hashlib.sha256(manifest).hexdigest(),))
     return {'snapshot': '.codemanager/index/manifest.json',
-            'shards': len(shards), 'bytes': len(manifest) + sum(s['bytes'] for s in shards),
-            'refreshed': refreshed}
+            'shards': len(shards), 'bytes': len(manifest) + sum(entry['bytes'] for entry in shards),
+            'rebuilt_partitions': written, 'reused_partitions': reused, 'refreshed': refreshed}
 
 
 def load_snapshot(graph, manifest):
     """Validate all input before replacing the cache. No SQL comes from the snapshot."""
     try:
         info = json.loads(manifest)
-        if info['format'] != FORMAT:
+        if info['format'] not in (1, FORMAT):
             raise ValueError('Unsupported snapshot format; regenerate with this CodeManager version')
+        partitions = bucket_descriptors(info)
         rows = {table: [] for table in TABLES}
         folder = graph.repo / '.codemanager' / 'index'
         for shard in info['shards']:
@@ -149,26 +212,36 @@ def load_snapshot(graph, manifest):
     except (KeyError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f'Invalid snapshot: {exc}') from exc
 
+    from .graph import bucket_for, file_signature, terms
     with graph.db:
-        for table in (*TABLES, 'search'):
-            graph.db.execute(f'DELETE FROM {table}')
-        for path in sources:
-            graph.db.execute('INSERT INTO files VALUES (?,?)', (path, files[path]))
-        loaded = set()
+        existing = {row['path']: row['digest'] for row in graph.db.execute('SELECT path,digest FROM files')}
+        cached = {row['bucket']: row['descriptors'] for row in graph.db.execute('SELECT * FROM snapshot_buckets')}
+        altered = {key for key, value in partitions.items() if cached.get(key) != json.dumps(value, sort_keys=True)}
+        replacing = {path for path in sources if existing.get(path) != files[path] or not partitions or bucket_for(path) in altered}
+        removed = set(existing) - sources.keys()
+        for path in removed | replacing:
+            graph.remove(path, keep_embeddings=path in replacing)
+        for path in replacing:
+            graph.db.execute('INSERT INTO files VALUES (?,?,?)', (path, files[path], bucket_for(path)))
+        loaded = {row[0] for row in graph.db.execute('SELECT id FROM nodes')}
         for ident, path, name, kind, start, end in rows['nodes']:
-            if path not in sources:
+            if path not in replacing:
                 continue
             body = '\n'.join(sources[path][start-1:end])
             graph.db.execute('INSERT INTO nodes VALUES (?,?,?,?,?,?,?)', (ident, path, name, kind, start, end, body))
-            from .graph import terms
             graph.db.execute('INSERT INTO search VALUES (?,?,?,?)', (ident, terms(name), terms(path), terms(body)))
             loaded.add(ident)
         for row in rows['edges']:
-            if row[0] in loaded and row[1] in loaded:
+            if nodes[row[0]][1] in replacing and row[0] in loaded and row[1] in loaded:
                 graph.db.execute('INSERT INTO edges VALUES (?,?,?)', row)
         for row in rows['refs']:
-            if row[0] in loaded:
+            if nodes[row[0]][1] in replacing and row[0] in loaded:
                 graph.db.execute('INSERT INTO refs VALUES (?,?,?)', row)
-        # Parse only changed/new source files, remove deleted files, and resolve links.
+        # A removed or reloaded target can change an otherwise unchanged importer's edges.
+        excluded = set(files) - sources.keys()
+        graph.resolve_changes(removed | replacing | excluded)
+        graph.mark_dirty(removed | replacing | excluded)
         graph.index()
+        graph.db.execute('DELETE FROM snapshot_buckets')
+        graph.db.executemany('INSERT INTO snapshot_buckets VALUES (?,?)', ((key, json.dumps(value, sort_keys=True)) for key, value in partitions.items()))
         graph.db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', ('snapshot', hashlib.sha256(manifest).hexdigest()))

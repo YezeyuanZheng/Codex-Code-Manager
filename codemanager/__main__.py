@@ -100,7 +100,7 @@ def main():
         p.add_argument('--repo', required=True, help='Path to a local checkout')
         if command in ('watch', 'serve'):
             p.add_argument('--interval', type=interval_seconds, default=1, help='Refresh interval in seconds (0.1..60)')
-        if command in ('search', 'serve', 'embed'):
+        if command in ('search', 'serve', 'embed', 'check'):
             p.add_argument('--model', help='FastEmbed model ID; overrides the environment and repository default')
         if command == 'model':
             choices = p.add_mutually_exclusive_group()
@@ -109,8 +109,11 @@ def main():
         if command in ('search', 'serve'):
             p.add_argument('--mode', choices=('hybrid', 'bm25', 'semantic'),
                            default=os.environ.get('CODEMANAGER_SEARCH_MODE', 'hybrid'))
+        if command in ('index', 'export', 'check'):
+            p.add_argument('--full', action='store_true', help='Rebuild or audit from all source files instead of reusing the cache')
         if command == 'check':
             p.add_argument('--staged', action='store_true', help='Validate the Git index instead of the working tree')
+            p.add_argument('--embeddings', action='store_true', help='Refresh staged embeddings in the local cache; blocks on failures (requires --staged)')
         if command == 'search':
             p.add_argument('query')
             p.add_argument('--budget', type=int, default=6000, help='Maximum serialized result bytes')
@@ -122,10 +125,10 @@ def main():
             print(json.dumps(model_settings(args.repo, save=args.save_model, reset=args.reset), ensure_ascii=False))
             return
         if args.command in ('check', 'install-hook'):
-            value = check_snapshot(args.repo, args.staged) if args.command == 'check' else install_hook(args.repo)
+            value = check_snapshot(args.repo, args.staged, full=args.full, embeddings=args.embeddings, model=args.model) if args.command == 'check' else install_hook(args.repo)
             print(json.dumps(value))
             return
-        graph = Graph(args.repo, load_snapshot=args.command not in ('index', 'export', 'watch'),
+        graph = Graph(args.repo, load_snapshot=not getattr(args, 'full', False),
                       embedding_model=getattr(args, 'model', None))
         if args.command == 'serve':
             serve(graph, args.interval, args.mode)
@@ -134,9 +137,9 @@ def main():
             watch(graph, args.interval)
             return
         if args.command == 'index':
-            value = graph.export()['refreshed']
+            value = graph.export(full=args.full)['refreshed']
         elif args.command == 'export':
-            value = graph.export()
+            value = graph.export(full=args.full)
         elif args.command == 'embed':
             graph.export()
             value = graph.embed()

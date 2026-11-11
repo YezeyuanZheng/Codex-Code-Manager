@@ -49,7 +49,9 @@ python -m codemanager export --repo /path/to/checkout
 ```
 
 This refreshes the graph, then writes a deterministic manifest and content-addressed
-JSONL shards under `.codemanager/index/`. Each shard is at most 1 MiB. Nodes store
+JSONL shards under `.codemanager/index/`. Snapshot format 2 partitions records by
+a stable hash of the source path, so edits rewrite only affected partitions. Each
+shard is at most 1 MiB. Nodes store
 paths, names, kinds, and line ranges; files store SHA-256 hashes. Source bodies and
 SQLite full-text indexes are not duplicated in Git. There are no timestamps or
 absolute paths, so an unchanged graph produces identical snapshot files.
@@ -185,7 +187,8 @@ reuse their vectors; changed passages are re-embedded before the next hybrid or
 semantic search, deleted nodes lose their vectors, and model changes replace the
 old model cache. Polling/export keeps graph metadata current without downloading
 a model or running inference. `embed` explicitly warms vectors after edits.
-Commit checks remain offline and deterministic; they do not require embeddings.
+Graph-only checks remain offline and deterministic. The installed pre-commit
+hook additionally requires missing/stale embeddings to be regenerated successfully.
 
 Dense search currently scans the cached vectors exactly in Python. Its cost grows
 with passage count times vector dimensions; large repositories may benefit from
@@ -251,6 +254,56 @@ weights are available. Repository configuration contains the model ID only;
 weights and vectors stay outside Git. If committing `codemanager.json`, refresh
 and stage its matching graph snapshot as for other indexed files.
 
+## Incremental graph construction
+
+Normal `index`, `export`, MCP polling, and pre-commit validation now reuse the
+existing graph. A first index still needs to parse the repository; ordinary
+updates process changes rather than reconstructing every definition.
+
+- File fingerprints include device, inode, size, modification time, and change
+  time. Unchanged files are not opened or rehashed. Changed fingerprints are
+  hashed; only changed content is parsed. Restoring just the modification time
+  does not hide an ordinary edit.
+- The cache records its last Git HEAD. When HEAD changes, Git's revision diff
+  forces verification of the affected paths; metadata checks also cover local
+  edits and new files. Missing revision bases fall back to hash verification.
+  Renames are handled as a deletion and an addition. No Git HEAD is embedded in
+  the snapshot, avoiding a circular dependency on the commit containing it.
+- Changed files replace their own nodes and containment edges. Candidate call
+  edges are re-resolved in those files; import edges are updated in importers of
+  changed modules. Unrelated references are left intact. This uses the current
+  resolver's supported same-file calls and exact repository-root imports.
+- Snapshot format 2 has up to 256 stable path-hash partitions, each split into
+  shards no larger than 1 MiB. Only dirty partitions are serialized. Unchanged
+  shards are reused, obsolete shards are removed, and source hashes remain in
+  the snapshot. Format 1 snapshots still load; the next export migrates them.
+- Staged validation reuses a transactionally copied graph cache, excludes large
+  derived vector/full-text indexes, and streams raw Git blobs one file at a time.
+  It respects partial staging and never changes the user's Git index. It still
+  reads staged blobs and copies graph rows, so validation has repository-size
+  I/O even when it parses zero files.
+
+Commands report `changed_files`, `hashed_files`, `unchanged_files`,
+`resolved_references`, `base_revision`, and `revision`. Exports also report
+`rebuilt_partitions` and `reused_partitions`. Warm checks report `reused_cache`
+and `parsed_files`. An unchanged warm export should hash/parse zero sources and
+rebuild zero partitions.
+
+For an explicit full rebuild or independent audit:
+
+```bash
+python -m codemanager index --repo /path/to/checkout --full
+python -m codemanager export --repo /path/to/checkout --full
+python -m codemanager check --repo /path/to/checkout --staged --full
+```
+
+Use `--full` after changing parser semantics or repairing a suspect local cache.
+Incremental commit checks rely on the local graph cache; full checks regenerate
+independently. Source discovery/metadata checks, cold snapshot loading, and
+validation copies still grow with project size. A dirty partition may contain
+unchanged files too, and an edited file is parsed as a whole. These improvements
+do not replace the separate linear vector search with an approximate index.
+
 ## Automatic updates and commit checks
 
 The MCP server refreshes and exports the graph every second while running, even
@@ -277,10 +330,17 @@ Install the pre-commit check once for each clone:
 python -m codemanager install-hook --repo /path/to/checkout
 ```
 
-The hook blocks a commit unless the **staged graph matches the staged source**.
-It reconstructs the graph from raw Git index blobs in a temporary directory, then
-compares the deterministic manifest and referenced shards. It does not run the
-repository's code, change your working files, or stage anything. A fresh graph is
+The hook blocks a commit unless the **staged graph matches the staged source**
+and **missing/stale embeddings have been regenerated successfully**.
+It copies cached graph rows to temporary storage, updates them against raw staged
+Git blobs, then compares the deterministic manifest and referenced shards. Changed
+files are parsed; unchanged graph rows are reused. Without a cache, it bootstraps
+from source once. `check --staged --full` performs an independent full audit. It does not run the
+repository's code, change your working files, or stage anything. After graph
+validation, it embeds the staged source using the staged model configuration
+(environment overrides still apply), reuses unchanged vectors, removes obsolete
+vectors, and writes the result to the persistent local SQLite vector cache.
+Dependency, model-load, or inference failures block the commit. A fresh graph is
 required even for the first commit. To fix a stale snapshot:
 
 ```bash
@@ -292,23 +352,43 @@ git -C /path/to/checkout add .codemanager/index/
 For partial commits, a working-tree export may include unstaged edits. If so, the
 hook correctly rejects it. Export from a separate worktree containing exactly the
 intended commit, or finish staging the intended source edits before exporting.
-Neither this tool nor the hook automatically stages source files.
+Neither this tool nor the hook automatically stages source files. Embedding input
+also comes from the Git index, so unstaged edits are not embedded as committed code.
+The working-tree graph remains untouched; when staged and working code differ,
+subsequent searches reconcile vectors against the working tree before using them.
+The hook checks that staged entries did not change while inference was running.
+
+Model weights and vectors remain local, outside Git. The hook can require a model
+download on first use. Install CodeManager and warm the selected model in the same
+Python environment used to install the hook. Rerun `install-hook` to upgrade a
+previous CodeManager graph-only hook, or to use a different Python interpreter.
+The embedding step is mandatory in the installed hook even if search mode is BM25.
+Failed embedding transactions preserve the previous vector rows.
 
 Manual checks (also useful in CI):
 
 ```bash
 python -m codemanager check --repo /path/to/checkout
 python -m codemanager check --repo /path/to/checkout --staged
+# Same graph validation plus mandatory staged-vector refresh as the hook:
+python -m codemanager check --repo /path/to/checkout --staged --embeddings
 ```
 
-Checks use temporary storage and leave the repository cache and snapshot untouched.
-Working-tree checks include nonignored untracked code; staged checks use only staged
+`--embeddings` requires `--staged`. It accepts `--model MODEL` for an explicit
+model override. Without `--embeddings`, manual `check` is graph-only and does not
+satisfy the installed hook's embedding requirement.
+
+Checks use temporary storage and leave the repository graph rows and snapshot
+untouched. The shared lock file may be opened for coordination. Embedding vectors
+and full-text indexes are excluded from the validation copy; `--embeddings`
+separately refreshes the actual local vector cache after validation succeeds. Working-tree checks
+include nonignored untracked code; staged checks use only staged
 files, including deletions and partial edits. Staged checks read raw blobs without
 Git smudge filters, so repositories that transform line endings or file contents
 must generate a snapshot matching those canonical staged bytes.
 
 The installer preserves an existing pre-commit hook or `core.hooksPath` and reports
-how to add `check --staged` to that workflow. Its launcher points to the current
+how to add `check --staged --embeddings` to that workflow. Its launcher points to the current
 Python interpreter and CodeManager installation; reinstall it if either moves.
 Git does not activate local hooks on clone, and `--no-verify` can bypass them.
 Use a required CI check if you need enforcement for every contributor. See
@@ -341,8 +421,8 @@ Python edges are static candidates: aliases, cross-file calls, attribute calls,
 inheritance, dynamic dispatch, and scope shadowing are not fully resolved. Other
 languages receive text chunks for both keyword and embedding retrieval, without
 semantic language parsing. The index represents the last refresh, not a live filesystem
-snapshot. Polling scans and hashes eligible files, so cost grows with repository
-size. There is no remote GitHub synchronization; local Git commands publish changes.
+snapshot. Polling still inventories paths and file metadata; only changed
+fingerprints trigger source reads and hashes. There is no remote GitHub synchronization; local Git commands publish changes.
 
 Context reduction depends on the task and the agent following retrieval guidance;
 it has not yet been benchmarked. A useful next milestone is an evaluation set of
@@ -371,3 +451,17 @@ Run the opt-in real-model smoke test after installing and downloading the model:
 ```bash
 CODEMANAGER_REAL_EMBEDDINGS=1 .venv/bin/python -m unittest discover -s tests -p test_hybrid.py -v
 ```
+
+Incremental tests compare snapshots byte-for-byte with independent full builds
+following edits, additions, deletions, renames, and Git revision changes. A
+303-file fixture verifies that a single edit hashes/parses one file and rebuilds
+one partition. Tests also ensure unchanged exports perform no source reads or
+partition serialization, warm checks parse zero files, legacy snapshots migrate,
+and validation copies exclude derived indexes. This fixture is a correctness
+check, not a production-scale performance benchmark.
+
+Commit-embedding tests verify persistent staged vectors, unchanged-vector reuse,
+partial staging, staged model selection, inference-failure rollback, rejection of
+stale graph snapshots before inference, and detection of staging changes during
+inference. Subprocess hook tests use controlled embedding runtimes to verify both
+successful commits and blocked commits without downloading a model.

@@ -1,16 +1,17 @@
 """Polling updates and Git-index validation without changing staged files."""
 import hashlib
-import io
 import json
 import os
 from pathlib import Path, PurePosixPath
 import shlex
 import subprocess
+import sqlite3
 import sys
 import tempfile
 import time
 
 from .graph import EXTENSIONS, SKIP, Graph
+from .locking import snapshot_lock
 from .snapshot import SHARD_BYTES, is_shard_name
 
 
@@ -85,18 +86,32 @@ def materialize_staged(repo, destination):
         selected.append(entry)
     if not selected:
         return
-    result = subprocess.run(['git', '-C', str(repo), 'cat-file', '--batch'],
-                            input=b''.join(oid+b'\n' for _, oid, _ in selected),
-                            capture_output=True, check=True)
-    stream = io.BytesIO(result.stdout)
-    for path, _, _ in selected:
-        _, _, size = stream.readline().split()
-        data = stream.read(int(size))
-        if stream.read(1) != b'\n':
-            raise ValueError('Invalid Git blob stream')
-        target = destination / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
+    # Stream raw blobs one file at a time instead of buffering the entire project.
+    with tempfile.TemporaryFile() as requests:
+        for _, oid, _ in selected:
+            requests.write(oid+b'\n')
+        requests.seek(0)
+        with subprocess.Popen(['git', '-C', str(repo), 'cat-file', '--batch'],
+                              stdin=requests, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            try:
+                for path, _, _ in selected:
+                    header = process.stdout.readline().split()
+                    if len(header) != 3 or header[1] != b'blob':
+                        raise ValueError('Invalid Git blob stream')
+                    size = int(header[2])
+                    data = process.stdout.read(size)
+                    if len(data) != size or process.stdout.read(1) != b'\n':
+                        raise ValueError('Invalid Git blob stream')
+                    target = destination / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+                errors = process.stderr.read()
+                if process.wait():
+                    raise ValueError(errors.decode(errors='replace'))
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait()
 
 
 def bundled_bytes(repo):
@@ -128,33 +143,93 @@ def bundled_bytes(repo):
         raise ValueError(f'Invalid graph snapshot: {exc}') from exc
 
 
-def check_snapshot(repo, staged=False):
+def seed_validation_cache(repo, destination):
+    source = repo / '.codemanager' / 'graph.sqlite3'
+    if not source.is_file():
+        return False
+    destination.mkdir(parents=True, exist_ok=True)
+    # Copy only graph rows in a consistent read transaction: embeddings and the
+    # full-text index can dominate database size and are unnecessary for validation.
+    with snapshot_lock(source.parent):
+        reader = sqlite3.connect(source.as_uri()+'?mode=ro', uri=True)
+        target = Graph(repo, load_snapshot=False, cache_dir=destination)
+        try:
+            reader.execute('BEGIN')
+            available = {row[0] for row in reader.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            tables = ('metadata', 'files', 'nodes', 'edges', 'refs', 'file_state',
+                      'snapshot_dirty', 'snapshot_buckets', 'shard_state')
+            with target.db:
+                for table in tables:
+                    if table not in available:
+                        continue
+                    wanted = {row[1] for row in target.db.execute(f'PRAGMA table_info({table})')}
+                    columns = [row[1] for row in reader.execute(f'PRAGMA table_info({table})') if row[1] in wanted]
+                    names = ','.join(columns)
+                    placeholders = ','.join('?' for _ in columns)
+                    target.db.executemany(f'INSERT INTO {table} ({names}) VALUES ({placeholders})', reader.execute(f'SELECT {names} FROM {table}'))
+        finally:
+            reader.close()
+            target.close()
+    return True
+
+
+def refresh_staged_embeddings(repo, graph, model=None):
+    """Embed the validated staged graph into the persistent local vector cache."""
+    from .embeddings import sync_embeddings
+    live = Graph(repo, load_snapshot=False)
+    try:
+        with snapshot_lock(live.cache_dir):
+            try:
+                result = sync_embeddings(graph, graph.embedding_provider(model), cache_db=live.db)
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                raise ValueError(f'Commit blocked: staged embedding refresh failed. Install the embedding dependency and make the selected model available, then retry. {exc}') from exc
+    finally:
+        live.close()
+    return result
+
+
+def check_snapshot(repo, staged=False, *, full=False, embeddings=False, model=None):
     repo = Path(repo).resolve(strict=True)
+    if embeddings and not staged:
+        raise ValueError('--embeddings requires --staged so commit vectors describe the staged code')
+    index_before = git(repo, 'ls-files', '--stage', '-z') if staged else None
+    embedding_result = None
     with tempfile.TemporaryDirectory(prefix='codemanager-check-') as name:
         root = Path(name)
+        cache = root / 'cache'
+        seeded = seed_validation_cache(repo, cache) if not full else False
         if staged:
-            materialize_staged(repo, root)
-            expected = bundled_bytes(root)
-            graph = Graph(root, load_snapshot=False, use_git=False)
-            try:
-                graph.export()
-                actual = bundled_bytes(root)
-            finally:
-                graph.close()
+            tree = root / 'staged'
+            tree.mkdir()
+            materialize_staged(repo, tree)
+            expected = bundled_bytes(tree)
+            graph = Graph(tree, load_snapshot=False, use_git=False, cache_dir=cache)
+            output = None
         else:
+            tree = root / 'result'
             expected = bundled_bytes(repo)
-            # Build separately, keeping both the repository cache and bundle untouched.
-            graph = Graph(repo, load_snapshot=False, cache_dir=root / 'cache')
-            try:
-                from .snapshot import export_snapshot
-                export_snapshot(graph, output_dir=root / '.codemanager' / 'index')
-                actual = bundled_bytes(root)
-            finally:
-                graph.close()
-        if expected != actual:
-            context = 'staged code' if staged else 'working tree'
-            raise ValueError(f'Graph snapshot does not match {context}. Run export, stage matching source and .codemanager/index/, then retry. For partial staging, export from a worktree containing exactly the intended commit.')
-    return {'valid': True, 'against': 'staged' if staged else 'working_tree'}
+            graph = Graph(repo, load_snapshot=False, cache_dir=cache)
+            output = tree / '.codemanager' / 'index'
+            # Copy just the existing snapshot so unchanged partitions can be reused.
+            output.mkdir(parents=True, exist_ok=True)
+            for filename, data in expected.items():
+                (output / filename).write_bytes(data)
+        try:
+            from .snapshot import export_snapshot
+            result = export_snapshot(graph, output_dir=output, full=full)
+            actual = bundled_bytes(tree)
+            if expected != actual:
+                context = 'staged code' if staged else 'working tree'
+                raise ValueError(f'Graph snapshot does not match {context}. Run export, stage matching source and .codemanager/index/, then retry. For partial staging, export from a worktree containing exactly the intended commit.')
+            if embeddings:
+                embedding_result = refresh_staged_embeddings(repo, graph, model)
+            if staged and git(repo, 'ls-files', '--stage', '-z') != index_before:
+                raise ValueError('Staged files changed during validation or embedding generation; retry the commit')
+        finally:
+            graph.close()
+    return {'valid': True, 'against': 'staged' if staged else 'working_tree',
+            'reused_cache': seeded, 'parsed_files': result['refreshed']['changed_files'],
+            'full': full, 'embeddings': embedding_result}
 
 
 def install_hook(repo):
@@ -165,16 +240,17 @@ def install_hook(repo):
     # Do not write to a shared/global custom hooksPath.
     configured = subprocess.run(['git', '-C', str(repo), 'config', '--get', 'core.hooksPath'], capture_output=True)
     if configured.returncode == 0:
-        raise ValueError('core.hooksPath is already configured. Add the check --staged command to your existing pre-commit workflow instead.')
+        raise ValueError('core.hooksPath is already configured. Add the check --staged --embeddings command to your existing pre-commit workflow instead.')
     path = Path(os.fsdecode(git(repo, 'rev-parse', '--git-path', 'hooks/pre-commit')).strip())
     if not path.is_absolute():
         path = repo / path
-    marker = '# CodeManager staged graph check v1'
-    if path.exists() and marker not in path.read_text():
-        raise ValueError('A pre-commit hook already exists. Add the check --staged command to it; the existing hook was preserved.')
+    marker = '# CodeManager staged graph and embedding check v2'
+    owned_markers = (marker, '# CodeManager staged graph check v1')
+    if path.exists() and not any(owned in path.read_text() for owned in owned_markers):
+        raise ValueError('A pre-commit hook already exists. Add the check --staged --embeddings command to it; the existing hook was preserved.')
     module_root = str(Path(__file__).resolve().parent.parent)
     script = f'import sys; sys.path.insert(0, {module_root!r}); from codemanager.__main__ import main; main()'
-    command = shlex.join([sys.executable, '-c', script, 'check', '--repo', str(repo), '--staged'])
+    command = shlex.join([sys.executable, '-c', script, 'check', '--repo', str(repo), '--staged', '--embeddings'])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('#!/bin/sh\n' + marker + '\nexec ' + command + '\n')
     path.chmod(0o755)
