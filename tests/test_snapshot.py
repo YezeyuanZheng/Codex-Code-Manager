@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 import shutil
@@ -12,6 +13,9 @@ from codemanager.snapshot import SHARD_BYTES
 
 class SnapshotTests(unittest.TestCase):
     def setUp(self):
+        environment = patch.dict(os.environ, {'CODEMANAGER_SEARCH_MODE': 'bm25'})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name) / 'origin'
         self.root.mkdir()

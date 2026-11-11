@@ -1,15 +1,20 @@
+import os
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from codemanager.graph import Graph
 
 
 class GraphTests(unittest.TestCase):
     def setUp(self):
+        environment = patch.dict(os.environ, {'CODEMANAGER_SEARCH_MODE': 'bm25'})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         (self.root / 'app.py').write_text('def authenticate(token):\n    return token == "ok"\n\ndef login(token):\n    return authenticate(token)\n')

@@ -1,7 +1,10 @@
 # Working on CodeManager
 
 Use the CodeManager MCP search tool, when connected, to locate relevant code before
-broad file reads. Candidate graph edges are hints; verify source before editing.
+broad file reads. Describe the intended feature or code change in natural language;
+include exact symbols when known. Search defaults to BM25 plus local embeddings.
+If embeddings are unavailable, report that limitation and use explicit `--mode
+bm25` for CLI searches. Candidate graph edges are hints; verify source before editing.
 
 After changing indexed code or documentation, refresh the portable graph before
 finishing:
