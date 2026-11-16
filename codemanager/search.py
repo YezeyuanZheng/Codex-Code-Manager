@@ -2,6 +2,7 @@
 import json
 import os
 from .locking import snapshot_lock
+from .source_coverage import SourceCoverage, add_reference, source_item
 
 
 class GraphSearch:
@@ -48,7 +49,7 @@ class GraphSearch:
         pool = max(30, limit*4)
         lexical = self.db.execute('''SELECT nodes.*, bm25(search,0,8,3,1) AS rank FROM search
             JOIN nodes ON search.id=nodes.id WHERE search MATCH ? ORDER BY rank, nodes.id LIMIT ?''', (match, pool)).fetchall() if tokens and mode != 'semantic' else []
-        from .embeddings import dense_search, fuse, passages
+        from .embeddings import PASSAGE_CHARS, dense_search, fuse, passages
         provider = self.embedding_provider(model) if mode != 'bm25' else None
         semantic = dense_search(self, provider, query, pool) if provider is not None else []
         semantic_info = {ident: (score, chunk) for ident, score, chunk in semantic}
@@ -61,7 +62,8 @@ class GraphSearch:
             # Return the best matching part of long symbols, retaining its actual lines.
             if ident in semantic_info:
                 _, chunk = semantic_info[ident]
-                _, row['start'], row['end'], row['body'] = list(passages(row))[chunk]
+                row['_offset'] = chunk * PASSAGE_CHARS
+                row['_length'] = len(list(passages(row))[chunk][3])
             row['signals'] = signals
             hits.append(row)
             candidates.append((row, 'search'))
@@ -77,14 +79,23 @@ class GraphSearch:
         # Budget includes serialized metadata and escaping, not just source bodies.
         output = {'results': [], 'budget_bytes': budget, 'truncated': False, 'mode': mode,
                   'model': getattr(provider, 'model_name', provider.identity) if provider is not None else None}
-        for row, reason in candidates:
-            item = {k: row[k] for k in ('id', 'path', 'name', 'kind', 'start', 'end', 'body')}
+        coverage = SourceCoverage()
+        excerpts = ((row, reason, start, end) for row, reason in candidates
+                    for start, end in (list(coverage.uncovered(row, row.get('_offset', 0), row.get('_length')))
+                                       or [(None, None)]))
+        for row, reason, start, end in excerpts:
+            if start is None:
+                add_reference(output, row, reason, coverage, budget, row.get('_offset', 0), row.get('_length'))
+                continue
+            item = {k: row[k] for k in ('id', 'path', 'name', 'kind')}
+            item.update(source_item(row, start, end))
             item['request_mapping'] = json.loads(row['request_mapping'])
             item['reason'] = reason
             item['signals'] = row.get('signals', ['graph'])
             item['truncated'] = False
             output['results'].append(item)
             if len(json.dumps(output, ensure_ascii=False).encode()) <= budget:
+                coverage.add(row, start, len(item['body']))
                 continue
             item['truncated'] = True
             output['truncated'] = True
@@ -92,12 +103,12 @@ class GraphSearch:
             lo, hi = 0, len(body)
             while lo < hi:
                 mid = (lo+hi+1)//2
-                item['body'] = body[:mid]
+                item.update(source_item(row, start, start+mid))
                 if len(json.dumps(output, ensure_ascii=False).encode()) <= budget:
                     lo = mid
                 else:
                     hi = mid-1
-            item['body'] = body[:lo]
+            item.update(source_item(row, start, start+lo))
             if not lo:
                 output['results'].pop()
             break

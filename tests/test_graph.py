@@ -41,7 +41,8 @@ class GraphTests(unittest.TestCase):
     def test_budget_and_graph_expansion(self):
         self.graph.index()
         result = self.graph.search('login', 10000)
-        self.assertTrue(any(r['reason'] == 'graph_neighbor' for r in result['results']))
+        self.assertTrue(any(r['reason'] == 'graph_neighbor'
+                            for r in result['results'] + result.get('references', [])))
         for budget in (256, 400, 1000):
             result = self.graph.search('authenticate', budget)
             self.assertLessEqual(len(json.dumps(result, ensure_ascii=False).encode()), budget)

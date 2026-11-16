@@ -28,7 +28,15 @@ python -m codemanager node-context --repo . \
 
 Results contain bounded passages for selected nodes, followed by one-hop callers,
 callees, imports or containers. Relations carry the anchor ID, edge kind and
-incoming/outgoing direction. Duplicate nodes are not repeated. Graph resolution
+incoming/outgoing direction. Source coverage is checked against indexed file
+positions within each response, including character positions on partial lines.
+Fully covered source bodies are omitted; partially covered candidates return only
+their uncovered excerpts. A node can therefore have multiple disjoint excerpts,
+each retaining its ID, source coordinates, and continuation offset. Requested
+nodes precede related nodes, and omitted duplicate snippets do not consume the
+result limit. Covered nodes retain compact `references` with their IDs, reasons,
+graph relationship hints, and `covered_by` IDs pointing to returned source.
+Reference metadata shares the response byte budget. Graph resolution
 is conservative; non-Python files currently provide chunks and containment rather
 than resolved function calls.
 
@@ -41,6 +49,14 @@ the total byte budget. `truncated` marks incomplete evidence; use a result's
 Offsets count characters in that node's source, not absolute file bytes. Neighbor
 nodes start at offset zero. A stale/unknown ID produces an explicit error asking
 for a refreshed search.
+
+Search responses apply the same source-coverage filtering and include node-relative
+`offset` and `next_offset` coordinates, including when a semantic hit starts partway
+through a long line. Coverage records only emitted source, not the full indexed
+extent of a truncated node. The filter uses the index without reading source files;
+it resets on every call, so it neither hides evidence across calls nor assumes
+previously returned code is still current after an edit. Search ranking, snippet
+budgets, and the retrieval-first workflow are unchanged.
 
 ## Review context
 

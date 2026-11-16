@@ -2,6 +2,7 @@
 import json
 
 from .embeddings import PASSAGE_CHARS
+from .source_coverage import SourceCoverage, add_reference, source_item
 
 
 def retrieve(graph, node_ids, budget=6000, limit=8, include_related=True, offset=0, include_requested=True):
@@ -39,24 +40,30 @@ def retrieve(graph, node_ids, budget=6000, limit=8, include_related=True, offset
                 via = {'node_id': ident, 'kind': edge['kind'],
                        'direction': 'outgoing' if edge['source'] == ident else 'incoming'}
                 candidates.append((rows[other], 'related_node', via))
-    output = {'results': [], 'budget_bytes': budget, 'truncated': len(candidates) > limit,
+    output = {'results': [], 'budget_bytes': budget, 'truncated': False,
               'scope': 'selected_nodes_and_one_hop_candidates'}
-    for row, reason, via in candidates[:limit]:
+    coverage = SourceCoverage()
+    excerpts = ((row, reason, via, start, end) for row, reason, via in candidates
+                for start, end in (list(coverage.uncovered(row, offset if reason == 'requested_node' else 0,
+                                                          PASSAGE_CHARS)) or [(None, None)]))
+    for row, reason, via, current, stop in excerpts:
+        if current is None:
+            add_reference(output, row, reason, coverage, budget,
+                          offset if reason == 'requested_node' else 0, PASSAGE_CHARS, via)
+            continue
+        if len(output['results']) >= limit:
+            output['truncated'] = True
+            break
         # Long nodes start with one passage; do not dump the whole definition.
-        current = offset if reason == 'requested_node' else 0
-        if current > len(row['body']):
-            raise ValueError('offset exceeds node source length')
-        body = row['body'][current:current+PASSAGE_CHARS]
-        start = row['start']+row['body'][:current].count('\n')
-        end = min(row['end'], start+body.count('\n'))
+        body = row['body'][current:stop]
         item = {key: row[key] for key in ('id', 'path', 'name', 'kind')}
-        item.update(start=start, end=end, body=body, node_start=row['start'], node_end=row['end'],
-                    reason=reason, via=via, offset=current,
-                    next_offset=current+len(body) if current+len(body) < len(row['body']) else None,
+        item.update(source_item(row, current, stop))
+        item.update(node_start=row['start'], node_end=row['end'], reason=reason, via=via,
                     truncated=current > 0 or len(body) < len(row['body']),
                     request_mapping=json.loads(row['request_mapping']))
         output['results'].append(item)
         if len(json.dumps(output, ensure_ascii=False).encode()) <= budget:
+            coverage.add(row, current, len(item['body']))
             output['truncated'] |= item['truncated']
             # Setting the flag changes false to true, reducing serialized size.
             continue
@@ -65,16 +72,12 @@ def retrieve(graph, node_ids, budget=6000, limit=8, include_related=True, offset
         lo, hi = 0, len(body)
         while lo < hi:
             mid = (lo+hi+1)//2
-            item['body'] = body[:mid]
-            item['end'] = min(row['end'], start+item['body'].count('\n'))
-            item['next_offset'] = current+mid if current+mid < len(row['body']) else None
+            item.update(source_item(row, current, current+mid))
             if len(json.dumps(output, ensure_ascii=False).encode()) <= budget:
                 lo = mid
             else:
                 hi = mid-1
-        item['body'] = body[:lo]
-        item['end'] = min(row['end'], start+item['body'].count('\n'))
-        item['next_offset'] = current+lo if current+lo < len(row['body']) else None
+        item.update(source_item(row, current, current+lo))
         if not lo:
             output['results'].pop()
         break

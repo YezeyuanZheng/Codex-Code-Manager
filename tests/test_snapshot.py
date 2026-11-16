@@ -39,7 +39,8 @@ class SnapshotTests(unittest.TestCase):
             graph = Graph(clone)
         try:
             result = graph.search('login', 10000)
-            self.assertTrue(any(r['reason'] == 'graph_neighbor' for r in result['results']))
+            self.assertTrue(any(r['reason'] == 'graph_neighbor'
+                                for r in result['results'] + result.get('references', [])))
             self.assertTrue(any('return authenticate(token)' in r['body'] for r in result['results']))
         finally:
             graph.close()
