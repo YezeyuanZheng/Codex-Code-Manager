@@ -16,7 +16,7 @@ python -m venv .venv
 .venv/bin/python -m pip install -e .
 .venv/bin/python -m codemanager index --repo /path/to/checkout
 .venv/bin/python -m codemanager embed --repo /path/to/checkout
-.venv/bin/python -m codemanager search --repo /path/to/checkout "Add a check that prevents unauthenticated users from opening private pages" --budget 6000
+.venv/bin/python -m codemanager context --repo /path/to/checkout "Add a check that prevents unauthenticated users from opening private pages" --budget 6000
 ```
 
 `embed` warms the model and vector cache; searches also generate any missing
@@ -39,6 +39,38 @@ automatically, and the MCP server polls for changes while running. Unchanged fil
 are not reparsed; deleted nodes are removed and relationships are resolved again. Files are read as data; repository code is never imported or run.
 Without a Git repository, discovery uses a directory walk and built-in exclusions;
 that fallback does not interpret `.gitignore`.
+
+## Set up Codex hooks for each checkout
+
+For automatic retrieved context and completion checks in Codex, install the hooks
+once for every checkout you work on. Use the same Python environment in which you
+installed CodeManager and FastEmbed:
+
+```bash
+.venv/bin/python -m codemanager install-codex-hook --repo /path/to/checkout
+```
+
+This creates or updates the target checkout's `.codex/hooks.json` and adds managed
+guidance to its `AGENTS.md`, preserving other instructions and hook handlers:
+
+- **UserPromptSubmit** supplies budgeted CodeManager source and relationship hints
+  before Codex handles your message.
+- **Stop** checks file-length limits before Codex finishes, even when optional
+  independent review is disabled.
+
+Start a new Codex session in that checkout and use `/hooks` to review and trust
+the hooks. The project must be trusted; the installer does not grant trust.
+
+The generated commands contain absolute paths to your Python interpreter,
+CodeManager installation, and target checkout. Generate them locally rather than
+copying another machine's commands. Rerun installation after moving a checkout or
+changing its Python environment. A Git clone alone does not install or activate
+these hooks; the setup command is repeatable without duplicating owned handlers.
+
+Hooks call CodeManager directly and do not require a running MCP server. To expose
+`get_context` for follow-up retrieval, also configure the MCP connection described
+under [Use from Codex](#use-from-codex). Standalone CLI/MCP use does not require
+Codex hooks. See [automatic context setup](docs/context.md) for details.
 
 ## Ship the graph with a Git clone
 
@@ -123,15 +155,15 @@ The old MCP retrieval names are removed. Lower-level `search` and `node-context`
 CLI commands remain available for compatibility. Restart an existing CodeManager
 MCP server to load the updated catalog.
 
-Install with `python -m pip install -e /home/yeo/codemanager` in your preferred
+Install with `python -m pip install -e /absolute/path/to/codemanager` in your preferred
 virtual environment. Point the Codex MCP configuration to that environment's
 Python so it can find FastEmbed. Example for this project's `.venv`:
 
 ```toml
 [mcp_servers.codemanager]
-command = "/home/yeo/codemanager/.venv/bin/python"
+command = "/absolute/path/to/codemanager/.venv/bin/python"
 args = ["-m", "codemanager", "serve", "--repo", "/absolute/path/to/checkout"]
-cwd = "/home/yeo/codemanager"
+cwd = "/absolute/path/to/codemanager"
 # Allow complete_task to finish its optional review (default reviewer timeout: 600s).
 tool_timeout_sec = 660
 ```
@@ -143,13 +175,15 @@ modify your global configuration or automatically register itself.
 
 Add guidance like this to the indexed project's `AGENTS.md`:
 
-> Use CodeManager's `search_code` tool to locate relevant code before broad file
-> reads. Describe the intended feature or change in natural language; use exact
-> names when known. Hybrid search combines keywords and embeddings. The server refreshes automatically. After editing files, call
+> Start with the context supplied by the prompt hook. For gaps, batch independent
+> questions, exact symbols, or node IDs in one `get_context` call. It includes
+> bounded expansion; stop retrieving when sufficient. Use per-node offsets for
+> batched continuations. The server refreshes automatically. After editing files, call
 > `index_repository` before finishing to publish the final graph immediately.
-> Start with a 6000-byte budget. Use returned paths and line ranges for focused
-> reads when more detail is needed. Treat candidate edges as hints and verify
-> source before editing. If search is incomplete, fall back to ripgrep.
+> Use one shared byte budget (12,000 by default; the prompt hook uses 6,000).
+> Use returned paths and line ranges for focused reads only for an unresolved
+> gap. Treat candidate edges as hints and verify source before editing. Report
+> retrieval failures before falling back to focused ripgrep.
 
 Codex MCP setup reference: https://developers.openai.com/learn/docs-mcp
 
@@ -167,14 +201,14 @@ call/import neighbors within the same output budget:
    `1 / (60 + rank)` across the two lists. This avoids directly adding BM25 and
    cosine scores, whose numerical scales differ.
 
-Results report `mode` and per-hit `signals` (`bm25`, `embedding`, or `graph`).
+The lower-level `search` command reports `mode` and per-hit `signals` (`bm25`, `embedding`, or `graph`).
 A semantic hit in a long definition returns the matching passage and its line
 range. Passages contain up to 1200 source characters with a path/name header;
 the model may further tokenize/truncate unusually dense code. No generated
 summaries or LLM calls are used.
 
 Choose `--mode hybrid`, `--mode semantic`, or `--mode bm25` on CLI searches or
-`serve`. MCP `search_code` also accepts a per-query `mode`. Set
+`serve`. MCP `get_context` also accepts a per-request `mode`. Set
 `CODEMANAGER_SEARCH_MODE=bm25` for an explicit keyword-only default. Hybrid does
 not silently fall back to keyword search when dependency, model, or inference
 setup fails; it returns an actionable error.
@@ -241,7 +275,7 @@ python -m codemanager embed --repo /path/to/checkout --model BAAI/bge-small-en-v
 python -m codemanager serve --repo /path/to/checkout --model BAAI/bge-small-en-v1.5
 ```
 
-MCP `search_code` accepts a `model` argument too. A per-query override takes
+MCP `get_context` accepts a `model` argument too. A per-request override takes
 priority over the server's `--model`. Otherwise, precedence is command-line model,
 `CODEMANAGER_EMBEDDING_MODEL`, repository configuration, then the built-in Jina
 code model. Search output reports the actual model used (`null` for BM25-only).
