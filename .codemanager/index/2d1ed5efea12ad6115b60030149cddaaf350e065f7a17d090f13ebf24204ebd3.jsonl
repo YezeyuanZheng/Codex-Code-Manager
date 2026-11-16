@@ -1,0 +1,6 @@
+{"table":"files","values":["AGENTS.md","c618afc7397eef1d6bae8beb8920e25a7d085a9120d012ed401df59514a37ea1"]}
+{"table":"nodes","values":["AGENTS.md:1:AGENTS.md","AGENTS.md","AGENTS.md","file",1,40,"[]"]}
+{"table":"nodes","values":["AGENTS.md:1:chunk_1","AGENTS.md","chunk_1","chunk",1,60,"[]"]}
+{"table":"nodes","values":["AGENTS.md:61:chunk_61","AGENTS.md","chunk_61","chunk",61,89,"[]"]}
+{"table":"edges","values":["AGENTS.md:1:AGENTS.md","AGENTS.md:1:chunk_1","contains"]}
+{"table":"edges","values":["AGENTS.md:1:AGENTS.md","AGENTS.md:61:chunk_61","contains"]}

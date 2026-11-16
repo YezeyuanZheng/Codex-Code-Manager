@@ -1,0 +1,4 @@
+{"table":"files","values":["codemanager.json","4f3848e24134618e6f3825c9b2024eb85fe6f0120ff7271a7106827f077fb44b"]}
+{"table":"nodes","values":["codemanager.json:1:chunk_1","codemanager.json","chunk_1","chunk",1,6,"[]"]}
+{"table":"nodes","values":["codemanager.json:1:codemanager.json","codemanager.json","codemanager.json","file",1,6,"[]"]}
+{"table":"edges","values":["codemanager.json:1:codemanager.json","codemanager.json:1:chunk_1","contains"]}

@@ -1,0 +1,8 @@
+{"table":"files","values":["docs/review.md","ed71332608ec28b1353495bae625a70a5a77bfa928181de16eff82c7dd013b65"]}
+{"table":"nodes","values":["docs/review.md:121:chunk_121","docs/review.md","chunk_121","chunk",121,160,"[]"]}
+{"table":"nodes","values":["docs/review.md:1:chunk_1","docs/review.md","chunk_1","chunk",1,60,"[]"]}
+{"table":"nodes","values":["docs/review.md:1:docs/review.md","docs/review.md","docs/review.md","file",1,40,"[]"]}
+{"table":"nodes","values":["docs/review.md:61:chunk_61","docs/review.md","chunk_61","chunk",61,120,"[]"]}
+{"table":"edges","values":["docs/review.md:1:docs/review.md","docs/review.md:121:chunk_121","contains"]}
+{"table":"edges","values":["docs/review.md:1:docs/review.md","docs/review.md:1:chunk_1","contains"]}
+{"table":"edges","values":["docs/review.md:1:docs/review.md","docs/review.md:61:chunk_61","contains"]}

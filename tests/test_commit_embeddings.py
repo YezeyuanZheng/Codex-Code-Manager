@@ -148,7 +148,7 @@ class CommitEmbeddingTests(unittest.TestCase):
         hook = self.repo/'.git/hooks/pre-commit'
         hook.write_text('#!/bin/sh\n# CodeManager staged graph check v1\nexit 0\n')
         install_hook(self.repo)
-        self.assertIn('--embeddings',hook.read_text())
+        self.assertIn('commit-check',hook.read_text())
         # Simulate a broken local runtime in the subprocess, independently of
         # whether FastEmbed happens to be installed on the developer's machine.
         runtime = self.base/'broken-runtime'

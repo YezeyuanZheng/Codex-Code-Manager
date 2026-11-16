@@ -1,0 +1,10 @@
+{"table":"files","values":["docs/internals.md","4ea038bde8cefbf8a16576ecc3a2772a20b49dc8a42c248e7d17eaabe52f7135"]}
+{"table":"nodes","values":["docs/internals.md:121:chunk_121","docs/internals.md","chunk_121","chunk",121,180,"[]"]}
+{"table":"nodes","values":["docs/internals.md:181:chunk_181","docs/internals.md","chunk_181","chunk",181,218,"[]"]}
+{"table":"nodes","values":["docs/internals.md:1:chunk_1","docs/internals.md","chunk_1","chunk",1,60,"[]"]}
+{"table":"nodes","values":["docs/internals.md:1:docs/internals.md","docs/internals.md","docs/internals.md","file",1,40,"[]"]}
+{"table":"nodes","values":["docs/internals.md:61:chunk_61","docs/internals.md","chunk_61","chunk",61,120,"[]"]}
+{"table":"edges","values":["docs/internals.md:1:docs/internals.md","docs/internals.md:121:chunk_121","contains"]}
+{"table":"edges","values":["docs/internals.md:1:docs/internals.md","docs/internals.md:181:chunk_181","contains"]}
+{"table":"edges","values":["docs/internals.md:1:docs/internals.md","docs/internals.md:1:chunk_1","contains"]}
+{"table":"edges","values":["docs/internals.md:1:docs/internals.md","docs/internals.md:61:chunk_61","contains"]}

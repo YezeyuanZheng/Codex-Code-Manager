@@ -1,0 +1,6 @@
+{"table":"files","values":["docs/file-limits.md","42ca559ae69dba39110c57053c0d3a5c0da794e91e2e900043a9561912e79f1f"]}
+{"table":"nodes","values":["docs/file-limits.md:1:chunk_1","docs/file-limits.md","chunk_1","chunk",1,60,"[]"]}
+{"table":"nodes","values":["docs/file-limits.md:1:docs/file-limits.md","docs/file-limits.md","docs/file-limits.md","file",1,40,"[]"]}
+{"table":"nodes","values":["docs/file-limits.md:61:chunk_61","docs/file-limits.md","chunk_61","chunk",61,92,"[]"]}
+{"table":"edges","values":["docs/file-limits.md:1:docs/file-limits.md","docs/file-limits.md:1:chunk_1","contains"]}
+{"table":"edges","values":["docs/file-limits.md:1:docs/file-limits.md","docs/file-limits.md:61:chunk_61","contains"]}

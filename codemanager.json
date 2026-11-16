@@ -1,0 +1,6 @@
+{
+  "file_limits": {
+    "max_lines": 500,
+    "max_chars": 20000
+  }
+}

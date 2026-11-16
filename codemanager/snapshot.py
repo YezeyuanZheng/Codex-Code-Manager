@@ -5,11 +5,11 @@ from pathlib import Path, PurePosixPath
 import tempfile
 from .locking import snapshot_lock
 
-FORMAT = 2
+FORMAT = 4
 SHARD_BYTES = 1024 * 1024
 TABLES = {
     'files': ('path', 'digest'),
-    'nodes': ('id', 'path', 'name', 'kind', 'start', 'end'),
+    'nodes': ('id', 'path', 'name', 'kind', 'start', 'end', 'request_mapping'),
     'edges': ('source', 'target', 'kind'),
     'refs': ('source', 'name', 'kind'),
 }
@@ -38,8 +38,8 @@ def atomic_write(path, data):
 
 
 def bucket_descriptors(info):
-    """Format 2 uses stable path-hash partitions; format 1 remains readable."""
-    if info.get('format') != FORMAT:
+    """Formats 2–4 use stable path-hash partitions; format 1 remains readable."""
+    if info.get('format') not in (2, 3, FORMAT):
         return {}
     descriptors = {entry['file']: entry for entry in info['shards']}
     return {bucket: [descriptors[name] for name in names] for bucket, names in info['buckets'].items()}
@@ -89,7 +89,8 @@ def _export_snapshot(graph, *, output_dir=None, full=False):
     folder = Path(output_dir) if output_dir is not None else graph.repo / '.codemanager' / 'index'
     folder.mkdir(parents=True, exist_ok=True)
     try:
-        previous = bucket_descriptors(json.loads((folder / 'manifest.json').read_bytes()))
+        previous_info = json.loads((folder / 'manifest.json').read_bytes())
+        previous = bucket_descriptors(previous_info) if previous_info.get('format') == FORMAT else {}
     except (OSError, ValueError, KeyError, TypeError):
         previous = {}
     cached = {row['bucket']: row['descriptors'] for row in graph.db.execute('SELECT * FROM snapshot_buckets')}
@@ -126,7 +127,14 @@ def _export_snapshot(graph, *, output_dir=None, full=False):
             partitions[bucket] = entries
             written += 1
         shards = [entry for entries in partitions.values() for entry in entries]
-        manifest = encoded({'format': FORMAT, 'buckets': {key: [entry['file'] for entry in value] for key, value in partitions.items()}, 'shards': shards})
+        from .review import context
+        info = {'format': FORMAT, 'buckets': {key: [entry['file'] for entry in value] for key, value in partitions.items()}, 'shards': shards}
+        if context(graph) is not None:
+            info['review'] = context(graph)
+        from .purposes import purposes
+        if purposes(graph):
+            info['purposes'] = purposes(graph)
+        manifest = encoded(info)
         atomic_write(folder / 'manifest.json', manifest)
         # Git history owns old versions; the working tree contains only current shards.
         current = {entry['file'] for entry in shards}
@@ -148,8 +156,12 @@ def load_snapshot(graph, manifest):
     """Validate all input before replacing the cache. No SQL comes from the snapshot."""
     try:
         info = json.loads(manifest)
-        if info['format'] not in (1, FORMAT):
+        if info['format'] not in (1, 2, 3, FORMAT):
             raise ValueError('Unsupported snapshot format; regenerate with this CodeManager version')
+        from .review import validate_context
+        review_context = validate_context(info.get('review'))
+        from .purposes import validate_purposes
+        file_purposes = validate_purposes(info.get('purposes', {}))
         partitions = bucket_descriptors(info)
         rows = {table: [] for table in TABLES}
         folder = graph.repo / '.codemanager' / 'index'
@@ -170,6 +182,8 @@ def load_snapshot(graph, manifest):
             for line in data.splitlines():
                 record = json.loads(line)
                 table, values = record['table'], record['values']
+                if table == 'nodes' and isinstance(values, list) and len(values) == 6 and info['format'] in (1, 2):
+                    values.append('[]')
                 if table not in TABLES or not isinstance(values, list) or len(values) != len(TABLES[table]):
                     raise ValueError('Invalid snapshot record')
                 for i, value in enumerate(values):
@@ -197,7 +211,9 @@ def load_snapshot(graph, manifest):
                 continue
         nodes = {}
         for row in rows['nodes']:
-            ident, path, name, kind, start, end = row
+            ident, path, name, kind, start, end, mapping = row
+            from .requests import validate_mappings
+            validate_mappings(mapping)
             if ident in nodes or path not in files or start < 1 or end < start - 1:
                 raise ValueError('Invalid or duplicate snapshot node')
             if path in sources and end > len(sources[path]):
@@ -212,8 +228,12 @@ def load_snapshot(graph, manifest):
     except (KeyError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f'Invalid snapshot: {exc}') from exc
 
-    from .graph import bucket_for, file_signature, terms
+    from .graph import bucket_for, file_signature
     with graph.db:
+        from .review import set_context
+        set_context(graph, review_context)
+        from .purposes import store_purposes
+        store_purposes(graph, file_purposes)
         existing = {row['path']: row['digest'] for row in graph.db.execute('SELECT path,digest FROM files')}
         cached = {row['bucket']: row['descriptors'] for row in graph.db.execute('SELECT * FROM snapshot_buckets')}
         altered = {key for key, value in partitions.items() if cached.get(key) != json.dumps(value, sort_keys=True)}
@@ -224,12 +244,14 @@ def load_snapshot(graph, manifest):
         for path in replacing:
             graph.db.execute('INSERT INTO files VALUES (?,?,?)', (path, files[path], bucket_for(path)))
         loaded = {row[0] for row in graph.db.execute('SELECT id FROM nodes')}
-        for ident, path, name, kind, start, end in rows['nodes']:
+        for ident, path, name, kind, start, end, mapping in rows['nodes']:
             if path not in replacing:
                 continue
             body = '\n'.join(sources[path][start-1:end])
-            graph.db.execute('INSERT INTO nodes VALUES (?,?,?,?,?,?,?)', (ident, path, name, kind, start, end, body))
-            graph.db.execute('INSERT INTO search VALUES (?,?,?,?)', (ident, terms(name), terms(path), terms(body)))
+            graph.db.execute('INSERT INTO nodes (id,path,name,kind,start,end,body) VALUES (?,?,?,?,?,?,?)', (ident, path, name, kind, start, end, body))
+            from .requests import update_mapping, validate_mappings
+            node = graph.db.execute('SELECT * FROM nodes WHERE id=?', (ident,)).fetchone()
+            update_mapping(graph, node, validate_mappings(mapping))
             loaded.add(ident)
         for row in rows['edges']:
             if nodes[row[0]][1] in replacing and row[0] in loaded and row[1] in loaded:
@@ -241,6 +263,7 @@ def load_snapshot(graph, manifest):
         excluded = set(files) - sources.keys()
         graph.resolve_changes(removed | replacing | excluded)
         graph.mark_dirty(removed | replacing | excluded)
+        graph._read_mapping_snapshot = True
         graph.index()
         graph.db.execute('DELETE FROM snapshot_buckets')
         graph.db.executemany('INSERT INTO snapshot_buckets VALUES (?,?)', ((key, json.dumps(value, sort_keys=True)) for key, value in partitions.items()))

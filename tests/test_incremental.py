@@ -191,7 +191,7 @@ class IncrementalTests(unittest.TestCase):
             graph = Graph(clone)
         try:
             graph.export()
-            self.assertEqual(json.loads((folder/'manifest.json').read_bytes())['format'], 2)
+            self.assertEqual(json.loads((folder/'manifest.json').read_bytes())['format'], 4)
             self.assertFalse((folder / filename).exists())
         finally:
             graph.close()

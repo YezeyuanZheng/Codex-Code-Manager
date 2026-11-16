@@ -1,0 +1,81 @@
+"""Bounded, explicit retrieval of selected graph nodes and their one-hop context."""
+import json
+
+from .embeddings import PASSAGE_CHARS
+
+
+def retrieve(graph, node_ids, budget=6000, limit=8, include_related=True, offset=0, include_requested=True):
+    if (not isinstance(node_ids, list) or not 1 <= len(node_ids) <= 20 or
+        any(not isinstance(node, str) or not node for node in node_ids)):
+        raise ValueError('node_ids must contain 1..20 nonempty node IDs')
+    if type(budget) is not int or not 256 <= budget <= 100000 or type(limit) is not int or not 1 <= limit <= 50:
+        raise ValueError('budget must be 256..100000 bytes; limit must be 1..50')
+    if type(include_related) is not bool or type(include_requested) is not bool:
+        raise ValueError('include_related and include_requested must be boolean')
+    if type(offset) is not int or offset < 0:
+        raise ValueError('offset must be a nonnegative character offset')
+    selected = list(dict.fromkeys(node_ids))
+    rows = {}
+    for ident in selected:
+        row = graph.db.execute('SELECT * FROM nodes WHERE id=?', (ident,)).fetchone()
+        if row is None:
+            raise ValueError(f'Unknown node ID: {ident}; refresh search to get current node IDs')
+        rows[ident] = dict(row)
+    candidates = [(rows[ident], 'requested_node', None) for ident in selected] if include_requested else []
+    if include_related:
+        for ident in selected:
+            # Candidate relations are conservative hints, not verified call/dataflow edges.
+            edges = graph.db.execute('''SELECT source,target,kind FROM edges
+                WHERE source=? OR target=? ORDER BY kind='contains',kind,source,target LIMIT ?''',
+                (ident, ident, limit*4)).fetchall()
+            for edge in edges:
+                other = edge['target'] if edge['source'] == ident else edge['source']
+                if other in rows:
+                    continue
+                row = graph.db.execute('SELECT * FROM nodes WHERE id=?', (other,)).fetchone()
+                if row is None:
+                    continue
+                rows[other] = dict(row)
+                via = {'node_id': ident, 'kind': edge['kind'],
+                       'direction': 'outgoing' if edge['source'] == ident else 'incoming'}
+                candidates.append((rows[other], 'related_node', via))
+    output = {'results': [], 'budget_bytes': budget, 'truncated': len(candidates) > limit,
+              'scope': 'selected_nodes_and_one_hop_candidates'}
+    for row, reason, via in candidates[:limit]:
+        # Long nodes start with one passage; do not dump the whole definition.
+        current = offset if reason == 'requested_node' else 0
+        if current > len(row['body']):
+            raise ValueError('offset exceeds node source length')
+        body = row['body'][current:current+PASSAGE_CHARS]
+        start = row['start']+row['body'][:current].count('\n')
+        end = min(row['end'], start+body.count('\n'))
+        item = {key: row[key] for key in ('id', 'path', 'name', 'kind')}
+        item.update(start=start, end=end, body=body, node_start=row['start'], node_end=row['end'],
+                    reason=reason, via=via, offset=current,
+                    next_offset=current+len(body) if current+len(body) < len(row['body']) else None,
+                    truncated=current > 0 or len(body) < len(row['body']),
+                    request_mapping=json.loads(row['request_mapping']))
+        output['results'].append(item)
+        if len(json.dumps(output, ensure_ascii=False).encode()) <= budget:
+            output['truncated'] |= item['truncated']
+            # Setting the flag changes false to true, reducing serialized size.
+            continue
+        output['truncated'] = True
+        item['truncated'] = True
+        lo, hi = 0, len(body)
+        while lo < hi:
+            mid = (lo+hi+1)//2
+            item['body'] = body[:mid]
+            item['end'] = min(row['end'], start+item['body'].count('\n'))
+            item['next_offset'] = current+mid if current+mid < len(row['body']) else None
+            if len(json.dumps(output, ensure_ascii=False).encode()) <= budget:
+                lo = mid
+            else:
+                hi = mid-1
+        item['body'] = body[:lo]
+        item['end'] = min(row['end'], start+item['body'].count('\n'))
+        item['next_offset'] = current+lo if current+lo < len(row['body']) else None
+        if not lo:
+            output['results'].pop()
+        break
+    return output

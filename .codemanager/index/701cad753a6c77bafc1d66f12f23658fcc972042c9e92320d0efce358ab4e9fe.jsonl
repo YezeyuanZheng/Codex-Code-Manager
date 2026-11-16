@@ -1,0 +1,6 @@
+{"table":"files","values":["docs/node-context.md","e2c57ef0aee1fffd5e77f84769c702c08951f2911bdbe3ae67de717925fa9c6d"]}
+{"table":"nodes","values":["docs/node-context.md:1:chunk_1","docs/node-context.md","chunk_1","chunk",1,60,"[]"]}
+{"table":"nodes","values":["docs/node-context.md:1:docs/node-context.md","docs/node-context.md","docs/node-context.md","file",1,40,"[]"]}
+{"table":"nodes","values":["docs/node-context.md:61:chunk_61","docs/node-context.md","chunk_61","chunk",61,79,"[]"]}
+{"table":"edges","values":["docs/node-context.md:1:docs/node-context.md","docs/node-context.md:1:chunk_1","contains"]}
+{"table":"edges","values":["docs/node-context.md:1:docs/node-context.md","docs/node-context.md:61:chunk_61","contains"]}

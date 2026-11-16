@@ -8,6 +8,13 @@ import threading
 import time
 import sys
 from .graph import Graph
+from .mcp_tools import tool_catalog
+from . import file_limits
+from .codex_hooks import install as install_codex_hook, stop_hook
+from .context import prompt_hook
+from .requests import map_request
+from .purposes import get_file_purpose, set_file_purpose
+from .review import begin_task, map_change, review, configure, commit_check
 from .config import model_settings
 from .automation import check_snapshot, install_hook, interval_seconds, watch
 
@@ -44,11 +51,7 @@ def incoming(graph, interval):
 
 def serve(graph, interval=1, mode=None):
     """Newline-delimited JSON-RPC over stdio; stdout is protocol-only."""
-    tools = [
-        {'name': 'search_code', 'description': 'Search the indexed repository before reading whole files. Returns budgeted source snippets and candidate graph neighbors. Uses BM25 plus local embedding cosine similarity by default. Describe the intended feature or change in natural language. Automatically refreshes before searching.', 'inputSchema': {'type': 'object', 'properties': {'query': {'type': 'string'}, 'budget': {'type': 'integer', 'minimum': 256, 'maximum': 100000, 'default': 6000}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 50, 'default': 8}, 'mode': {'type': 'string', 'enum': ['hybrid', 'bm25', 'semantic'], 'default': 'hybrid'}, 'model': {'type': 'string', 'description': 'Optional FastEmbed model ID for this search, overriding the server/repository default.'}}, 'required': ['query'], 'additionalProperties': False}},
-        {'name': 'index_repository', 'description': 'Incrementally refresh and export the code graph after repository edits. The server also polls for edits automatically. Does not execute repository code.', 'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
-        {'name': 'graph_stats', 'description': 'Get counts of indexed files, code nodes, and edges.', 'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
-    ]
+    tools = tool_catalog()
     for line in incoming(graph, interval_seconds(interval)):
         request = None
         try:
@@ -74,6 +77,20 @@ def serve(graph, interval=1, mode=None):
                         args = dict(args)
                         args.setdefault('mode', mode)
                         value = graph.search(**args)
+                    elif name == 'retrieve_nodes':
+                        value = graph.retrieve_nodes(**args)
+                    elif name == 'get_file_purpose':
+                        value = get_file_purpose(graph, **args)
+                    elif name == 'set_file_purpose':
+                        value = set_file_purpose(graph, **args)
+                    elif name == 'begin_task':
+                        value = begin_task(graph, **args)
+                    elif name == 'complete_task' and not args:
+                        value = review(graph.repo)
+                    elif name == 'map_change':
+                        value = map_change(graph, **args)
+                    elif name == 'map_request':
+                        value = map_request(graph, **args)
                     elif name == 'index_repository' and not args:
                         value = refreshed['refreshed']
                     elif name == 'graph_stats' and not args:
@@ -95,13 +112,61 @@ def serve(graph, interval=1, mode=None):
 def main():
     parser = argparse.ArgumentParser(description='Local repository graph and budgeted code search')
     sub = parser.add_subparsers(dest='command', required=True)
-    for command in ('index', 'export', 'search', 'stats', 'serve', 'watch', 'check', 'install-hook', 'embed', 'model'):
+    for command in ('index', 'export', 'search', 'stats', 'serve', 'watch', 'check', 'install-hook', 'embed', 'model', 'map-request', 'review-config', 'begin-task', 'complete-task', 'review', 'map-change', 'commit-check', 'file-purpose', 'set-file-purpose', 'file-limits', 'check-length', 'codex-length-hook', 'install-codex-hook', 'codex-context-hook', 'node-context', 'review-evidence'):
         p = sub.add_parser(command)
         p.add_argument('--repo', required=True, help='Path to a local checkout')
         if command in ('watch', 'serve'):
             p.add_argument('--interval', type=interval_seconds, default=1, help='Refresh interval in seconds (0.1..60)')
         if command in ('search', 'serve', 'embed', 'check'):
             p.add_argument('--model', help='FastEmbed model ID; overrides the environment and repository default')
+        if command in ('file-purpose', 'set-file-purpose'):
+            p.add_argument('--path', required=True)
+        if command == 'set-file-purpose':
+            p.add_argument('--purpose', required=True)
+            p.add_argument('--request', required=True)
+            p.add_argument('--requirement', action='append', default=[])
+            p.add_argument('--remove-requirement', action='append', default=[])
+            p.add_argument('--removal-request')
+        if command == 'review-config':
+            choices = p.add_mutually_exclusive_group()
+            choices.add_argument('--enable', dest='enabled', action='store_const', const=True, default=None)
+            choices.add_argument('--disable', dest='enabled', action='store_const', const=False)
+            p.add_argument('--reviewer-model')
+        if command == 'node-context':
+            p.add_argument('--node-id', dest='node_ids', action='append', required=True)
+            p.add_argument('--budget', type=int, default=6000)
+            p.add_argument('--limit', type=int, default=8)
+            p.add_argument('--no-related', action='store_true')
+            p.add_argument('--related-only', action='store_true')
+            p.add_argument('--offset', type=int, default=0)
+        if command == 'review-evidence':
+            p.add_argument('--cache', required=True)
+            p.add_argument('--related-only', action='store_true')
+            action = p.add_mutually_exclusive_group(required=True)
+            action.add_argument('--query')
+            action.add_argument('--node-id', dest='node_ids', action='append')
+            action.add_argument('--diff-path')
+            p.add_argument('--budget', type=int, default=6000)
+            p.add_argument('--limit', type=int, default=8)
+            p.add_argument('--offset', type=int, default=0)
+        if command == 'file-limits':
+            p.add_argument('--max-lines', type=int)
+            p.add_argument('--max-chars', type=int)
+        if command == 'check-length':
+            p.add_argument('--staged', action='store_true')
+            p.add_argument('--all', dest='all_files', action='store_true')
+        if command == 'begin-task':
+            p.add_argument('--request', required=True)
+        if command == 'review':
+            p.add_argument('--staged', action='store_true')
+        if command == 'map-change':
+            p.add_argument('--path', required=True)
+            p.add_argument('--request', required=True)
+            p.add_argument('--fulfills', required=True)
+        if command == 'map-request':
+            p.add_argument('--node-id', required=True)
+            p.add_argument('--request', required=True)
+            p.add_argument('--fulfills', required=True)
         if command == 'model':
             choices = p.add_mutually_exclusive_group()
             choices.add_argument('--set', dest='save_model', metavar='MODEL', help='Save the repository default to codemanager.json')
@@ -121,6 +186,41 @@ def main():
     args = parser.parse_args()
     graph = None
     try:
+        if args.command == 'review-evidence':
+            from .review_evidence import read_evidence
+            print(json.dumps(read_evidence(args.repo, args.cache, query=args.query, node_ids=args.node_ids,
+                diff_path=args.diff_path, budget=args.budget, limit=args.limit, offset=args.offset, related_only=args.related_only), ensure_ascii=False))
+            return
+        if args.command == 'file-limits':
+            print(json.dumps(file_limits.configure(args.repo, args.max_lines, args.max_chars)))
+            return
+        if args.command == 'install-codex-hook':
+            print(json.dumps(install_codex_hook(args.repo)))
+            return
+        if args.command == 'codex-context-hook':
+            print(json.dumps(prompt_hook(args.repo), ensure_ascii=False))
+            return
+        if args.command == 'codex-length-hook':
+            print(json.dumps(stop_hook(args.repo)))
+            return
+        if args.command == 'check-length':
+            value = file_limits.check(args.repo, staged=args.staged, all_files=args.all_files)
+            print(json.dumps(value, ensure_ascii=False))
+            if not value['passed']:
+                parser.exit(1)
+            return
+        if args.command == 'review-config':
+            print(json.dumps(configure(args.repo, args.enabled, args.reviewer_model)))
+            return
+        if args.command == 'commit-check':
+            print(json.dumps(commit_check(args.repo)))
+            return
+        if args.command in ('complete-task', 'review'):
+            value = review(args.repo, staged=getattr(args, 'staged', False))
+            print(json.dumps(value, ensure_ascii=False))
+            if value.get('status') == 'failed':
+                parser.exit(1)
+            return
         if args.command == 'model':
             print(json.dumps(model_settings(args.repo, save=args.save_model, reset=args.reset), ensure_ascii=False))
             return
@@ -128,7 +228,7 @@ def main():
             value = check_snapshot(args.repo, args.staged, full=args.full, embeddings=args.embeddings, model=args.model) if args.command == 'check' else install_hook(args.repo)
             print(json.dumps(value))
             return
-        graph = Graph(args.repo, load_snapshot=not getattr(args, 'full', False),
+        graph = Graph(args.repo, load_snapshot=True,
                       embedding_model=getattr(args, 'model', None))
         if args.command == 'serve':
             serve(graph, args.interval, args.mode)
@@ -136,7 +236,21 @@ def main():
         if args.command == 'watch':
             watch(graph, args.interval)
             return
-        if args.command == 'index':
+        if args.command == 'node-context':
+            graph.export()
+            value = graph.retrieve_nodes(args.node_ids, args.budget, args.limit, not args.no_related, args.offset, not args.related_only)
+        elif args.command == 'file-purpose':
+            graph.export()
+            value = get_file_purpose(graph, args.path)
+        elif args.command == 'set-file-purpose':
+            value = set_file_purpose(graph, args.path, args.purpose, args.requirement, args.request, args.remove_requirement, args.removal_request)
+        elif args.command == 'begin-task':
+            value = begin_task(graph, args.request)
+        elif args.command == 'map-change':
+            value = map_change(graph, args.path, args.request, args.fulfills)
+        elif args.command == 'map-request':
+            value = map_request(graph, args.node_id, args.request, args.fulfills)
+        elif args.command == 'index':
             value = graph.export(full=args.full)['refreshed']
         elif args.command == 'export':
             value = graph.export(full=args.full)

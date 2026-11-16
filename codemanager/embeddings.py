@@ -85,6 +85,9 @@ def unpack(blob):
 def passages(node):
     """Embed all parts of a long symbol, rather than silently dropping its tail."""
     header = f"{node['path']}\n{node['kind']} {node['name']}"[:400] + '\n'
+    mapping = node['request_mapping'] if 'request_mapping' in node.keys() else '[]'
+    if mapping != '[]':
+        header += mapping + '\n'
     text = node['body']
     line = node['start']
     for offset in range(0, max(1, len(text)), PASSAGE_CHARS):

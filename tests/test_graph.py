@@ -73,7 +73,7 @@ class GraphTests(unittest.TestCase):
         proc = subprocess.run([sys.executable, '-m', 'codemanager', 'serve', '--repo', str(self.root)], input='\n'.join(map(json.dumps, requests))+'\n', capture_output=True, text=True, check=True)
         responses = [json.loads(line) for line in proc.stdout.splitlines()]
         self.assertEqual(len(responses), 4)
-        self.assertEqual(len(responses[1]['result']['tools']), 3)
+        self.assertEqual(len(responses[1]['result']['tools']), 10)
         self.assertFalse(responses[-1]['result']['isError'])
         self.assertTrue(json.loads(responses[-1]['result']['content'][0]['text'])['results'])
 

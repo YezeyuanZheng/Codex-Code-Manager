@@ -215,6 +215,19 @@ def check_snapshot(repo, staged=False, *, full=False, embeddings=False, model=No
             for filename, data in expected.items():
                 (output / filename).write_bytes(data)
         try:
+            from .review import set_context
+            manifest = expected.get('manifest.json')
+            with graph.db:
+                set_context(graph, json.loads(manifest).get('review') if manifest else None)
+                from .purposes import store_purposes
+                store_purposes(graph, json.loads(manifest).get('purposes', {}) if manifest else {})
+            from .requests import bundled_mappings, restore_mappings
+            # Intent is authored metadata: validate against the staged/bundled graph,
+            # never against mappings from a different working-tree cache.
+            with graph.db:
+                graph.db.execute("UPDATE nodes SET request_mapping='[]'")
+                restore_mappings(graph, bundled_mappings(graph))
+            graph._read_mapping_snapshot = True
             from .snapshot import export_snapshot
             result = export_snapshot(graph, output_dir=output, full=full)
             actual = bundled_bytes(tree)
@@ -244,13 +257,13 @@ def install_hook(repo):
     path = Path(os.fsdecode(git(repo, 'rev-parse', '--git-path', 'hooks/pre-commit')).strip())
     if not path.is_absolute():
         path = repo / path
-    marker = '# CodeManager staged graph and embedding check v2'
-    owned_markers = (marker, '# CodeManager staged graph check v1')
+    marker = '# CodeManager staged graph, embedding and optional review check v3'
+    owned_markers = (marker, '# CodeManager staged graph and embedding check v2', '# CodeManager staged graph check v1')
     if path.exists() and not any(owned in path.read_text() for owned in owned_markers):
         raise ValueError('A pre-commit hook already exists. Add the check --staged --embeddings command to it; the existing hook was preserved.')
     module_root = str(Path(__file__).resolve().parent.parent)
     script = f'import sys; sys.path.insert(0, {module_root!r}); from codemanager.__main__ import main; main()'
-    command = shlex.join([sys.executable, '-c', script, 'check', '--repo', str(repo), '--staged', '--embeddings'])
+    command = shlex.join([sys.executable, '-c', script, 'commit-check', '--repo', str(repo)])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('#!/bin/sh\n' + marker + '\nexec ' + command + '\n')
     path.chmod(0o755)

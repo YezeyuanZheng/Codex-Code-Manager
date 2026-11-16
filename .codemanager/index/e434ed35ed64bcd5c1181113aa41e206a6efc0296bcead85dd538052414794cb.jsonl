@@ -1,0 +1,4 @@
+{"table":"files","values":["codemanager/__init__.py","d8c6eecab2a34fa381f5bd1f7db53212bbee331ce7704f8d0de89073e31216d1"]}
+{"table":"nodes","values":["codemanager/__init__.py:1:codemanager/__init__.py","codemanager/__init__.py","codemanager/__init__.py","file",1,1,"[]"]}
+{"table":"nodes","values":["codemanager/__init__.py:1:module_1","codemanager/__init__.py","module_1","chunk",1,1,"[]"]}
+{"table":"edges","values":["codemanager/__init__.py:1:codemanager/__init__.py","codemanager/__init__.py:1:module_1","contains"]}
