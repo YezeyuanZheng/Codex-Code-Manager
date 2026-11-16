@@ -10,6 +10,7 @@ import sys
 from .graph import Graph
 from .mcp_tools import tool_catalog
 from . import file_limits
+from . import context_cli
 from .codex_hooks import install as install_codex_hook, stop_hook
 from .context import prompt_hook
 from .requests import map_request
@@ -72,13 +73,13 @@ def serve(graph, interval=1, mode=None):
                 name = params.get('name')
                 args = params.get('arguments', {})
                 try:
+                    if name in ('search_code', 'retrieve_nodes'):
+                        raise ValueError('This retrieval tool was removed; use get_context with query, symbols, or node_ids')
                     refreshed = graph.export()
-                    if name == 'search_code':
+                    if name == 'get_context':
                         args = dict(args)
                         args.setdefault('mode', mode)
-                        value = graph.search(**args)
-                    elif name == 'retrieve_nodes':
-                        value = graph.retrieve_nodes(**args)
+                        value = graph.get_context(**args)
                     elif name == 'get_file_purpose':
                         value = get_file_purpose(graph, **args)
                     elif name == 'set_file_purpose':
@@ -112,12 +113,14 @@ def serve(graph, interval=1, mode=None):
 def main():
     parser = argparse.ArgumentParser(description='Local repository graph and budgeted code search')
     sub = parser.add_subparsers(dest='command', required=True)
-    for command in ('index', 'export', 'search', 'stats', 'serve', 'watch', 'check', 'install-hook', 'embed', 'model', 'map-request', 'review-config', 'begin-task', 'complete-task', 'review', 'map-change', 'commit-check', 'file-purpose', 'set-file-purpose', 'file-limits', 'check-length', 'codex-length-hook', 'install-codex-hook', 'codex-context-hook', 'node-context', 'review-evidence'):
+    for command in ('index', 'export', 'search', 'context', 'stats', 'serve', 'watch', 'check', 'install-hook', 'embed', 'model', 'map-request', 'review-config', 'begin-task', 'complete-task', 'review', 'map-change', 'commit-check', 'file-purpose', 'set-file-purpose', 'file-limits', 'check-length', 'codex-length-hook', 'install-codex-hook', 'codex-context-hook', 'node-context', 'review-evidence'):
         p = sub.add_parser(command)
         p.add_argument('--repo', required=True, help='Path to a local checkout')
         if command in ('watch', 'serve'):
             p.add_argument('--interval', type=interval_seconds, default=1, help='Refresh interval in seconds (0.1..60)')
-        if command in ('search', 'serve', 'embed', 'check'):
+        if command == 'context':
+            context_cli.configure(p)
+        if command in ('search', 'context', 'serve', 'embed', 'check'):
             p.add_argument('--model', help='FastEmbed model ID; overrides the environment and repository default')
         if command in ('file-purpose', 'set-file-purpose'):
             p.add_argument('--path', required=True)
@@ -171,7 +174,7 @@ def main():
             choices = p.add_mutually_exclusive_group()
             choices.add_argument('--set', dest='save_model', metavar='MODEL', help='Save the repository default to codemanager.json')
             choices.add_argument('--reset', action='store_true', help='Remove the saved repository model')
-        if command in ('search', 'serve'):
+        if command in ('search', 'context', 'serve'):
             p.add_argument('--mode', choices=('hybrid', 'bm25', 'semantic'),
                            default=os.environ.get('CODEMANAGER_SEARCH_MODE', 'hybrid'))
         if command in ('index', 'export', 'check'):
@@ -239,6 +242,9 @@ def main():
         if args.command == 'node-context':
             graph.export()
             value = graph.retrieve_nodes(args.node_ids, args.budget, args.limit, not args.no_related, args.offset, not args.related_only)
+        elif args.command == 'context':
+            graph.export()
+            value = context_cli.run(graph, args)
         elif args.command == 'file-purpose':
             graph.export()
             value = get_file_purpose(graph, args.path)

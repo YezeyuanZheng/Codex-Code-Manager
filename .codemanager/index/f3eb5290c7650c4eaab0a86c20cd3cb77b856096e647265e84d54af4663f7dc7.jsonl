@@ -1,4 +1,4 @@
-{"table":"files","values":["tests/test_models.py","e062996442607b82a52745d3b89a614ec36392c9bc8a6e4e2cc4abf0ea506406"]}
+{"table":"files","values":["tests/test_models.py","b8acf8f27bccd44f7d7f80b13f87b373cb2feb71c84427e0452bc5ee53087a53"]}
 {"table":"nodes","values":["tests/test_models.py:105:ModelTests.test_mcp_request_can_override_server_model","tests/test_models.py","ModelTests.test_mcp_request_can_override_server_model","function",105,116,"[]"]}
 {"table":"nodes","values":["tests/test_models.py:17:ModelTests","tests/test_models.py","ModelTests","class",17,116,"[]"]}
 {"table":"nodes","values":["tests/test_models.py:18:ModelTests.setUp","tests/test_models.py","ModelTests.setUp","function",18,25,"[]"]}

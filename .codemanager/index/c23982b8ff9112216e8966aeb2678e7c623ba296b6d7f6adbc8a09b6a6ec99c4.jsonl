@@ -1,6 +1,0 @@
-{"table":"files","values":["codemanager/mcp_tools.py","4b39db1554410aa23d1165bc9474182d99b7a4ae0064c82f3562187d16119ba0"]}
-{"table":"nodes","values":["codemanager/mcp_tools.py:1:codemanager/mcp_tools.py","codemanager/mcp_tools.py","codemanager/mcp_tools.py","file",1,16,"[]"]}
-{"table":"nodes","values":["codemanager/mcp_tools.py:1:module_1","codemanager/mcp_tools.py","module_1","chunk",1,16,"[]"]}
-{"table":"nodes","values":["codemanager/mcp_tools.py:4:tool_catalog","codemanager/mcp_tools.py","tool_catalog","function",4,16,"[]"]}
-{"table":"edges","values":["codemanager/mcp_tools.py:1:codemanager/mcp_tools.py","codemanager/mcp_tools.py:1:module_1","contains"]}
-{"table":"edges","values":["codemanager/mcp_tools.py:1:codemanager/mcp_tools.py","codemanager/mcp_tools.py:4:tool_catalog","contains"]}

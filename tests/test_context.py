@@ -31,7 +31,9 @@ class ContextHookTests(unittest.TestCase):
         self.assertEqual(response['hookSpecificOutput']['hookEventName'], 'UserPromptSubmit')
         context = response['hookSpecificOutput']['additionalContext']
         self.assertIn('focused line ranges', context)
-        self.assertIn('retrieve_nodes', context)
+        self.assertIn('get_context', context)
+        self.assertNotIn('retrieve_nodes', context)
+        self.assertNotIn('search_code', context)
         self.assertIn('untrusted data', context)
         result = json.loads(context.split('Retrieved evidence (JSON; at most 6000 serialized bytes):\n')[1])
         self.assertEqual(result['mode'], 'hybrid')
@@ -41,9 +43,9 @@ class ContextHookTests(unittest.TestCase):
     def test_embedding_failure_is_explicit_and_bm25_result_is_supplied(self):
         with patch('codemanager.context.Graph') as constructor:
             graph = constructor.return_value
-            graph.search.side_effect = [EmbeddingError('Model missing'), {'results': [], 'mode': 'bm25'}]
+            graph.get_context.side_effect = [EmbeddingError('Model missing'), {'results': [], 'mode': 'bm25'}]
             response = prompt_hook(self.repo, {'prompt': 'multiply'})
-            self.assertEqual([call.kwargs['mode'] for call in graph.search.call_args_list], ['hybrid', 'bm25'])
+            self.assertEqual([call.kwargs['mode'] for call in graph.get_context.call_args_list], ['hybrid', 'bm25'])
             self.assertIn('explicit BM25', response['systemMessage'])
             self.assertIn('Model missing', response['hookSpecificOutput']['additionalContext'])
             graph.close.assert_called_once()

@@ -47,13 +47,13 @@ class NodeContextTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.graph.retrieve_nodes(['app.py:1:multiply'], include_related='yes')
 
-    def test_cli_and_mcp_retrieve_nodes(self):
+    def test_legacy_cli_and_combined_mcp_context(self):
         args = [sys.executable, '-m', 'codemanager']
         cli = subprocess.run(args+['node-context', '--repo', str(self.repo), '--node-id',
             'app.py:4:calculate'], capture_output=True, text=True, check=True)
         self.assertTrue(any(item['name'] == 'multiply' for item in json.loads(cli.stdout)['results']))
         request = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {
-            'name': 'retrieve_nodes', 'arguments': {'node_ids': ['app.py:4:calculate'], 'budget': 1200}}}
+            'name': 'get_context', 'arguments': {'node_ids': ['app.py:4:calculate'], 'budget': 1200}}}
         mcp = subprocess.run(args+['serve', '--repo', str(self.repo)], input=json.dumps(request)+'\n',
                              capture_output=True, text=True, check=True)
         response = json.loads(mcp.stdout)['result']

@@ -106,11 +106,11 @@ exporting unrelated local work.
 
 ## Use from Codex
 
-CodeManager includes a local stdio MCP server with ten tools:
+CodeManager includes a local stdio MCP server with nine tools:
 
 - `index_repository`: refresh the graph and publish the portable snapshot.
-- `retrieve_nodes`: expand selected node IDs and their related nodes before extra source reads.
-- `search_code`: refresh, then retrieve code and graph neighbors; `query`, `budget`, `limit`, `mode` (default `hybrid`), and optional `model`.
+- `get_context`: the single retrieval tool; batch questions, symbols, or node IDs,
+  with bounded expansion and per-node continuations under one shared byte budget.
 - `graph_stats`: inspect counts.
 - `begin_task`: register a coding task when optional review is enabled.
 - `get_file_purpose`: read a file's current purpose and requirements before editing.
@@ -118,6 +118,10 @@ CodeManager includes a local stdio MCP server with ten tools:
 - `map_request`: attach the request and fulfilled requirement to a code node.
 - `map_change`: explain a changed file or deletion outside a code node.
 - `complete_task`: run the optional independent review without staging or committing.
+
+The old MCP retrieval names are removed. Lower-level `search` and `node-context`
+CLI commands remain available for compatibility. Restart an existing CodeManager
+MCP server to load the updated catalog.
 
 Install with `python -m pip install -e /home/yeo/codemanager` in your preferred
 virtual environment. Point the Codex MCP configuration to that environment's

@@ -162,7 +162,7 @@ class AutomationTests(unittest.TestCase):
             (self.repo / 'app.py').write_text('def codex_edit():\n    return 99\n')
             self.wait_for_manifest(first)
             request = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
-                       'params': {'name': 'search_code', 'arguments': {'query': 'codex_edit'}}}
+                       'params': {'name': 'get_context', 'arguments': {'query': 'codex_edit'}}}
             output, errors = proc.communicate(json.dumps(request)+'\n', timeout=5)
             self.assertEqual(proc.returncode, 0, errors)
             result = json.loads(output)['result']

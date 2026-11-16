@@ -69,12 +69,15 @@ class GraphTests(unittest.TestCase):
             {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
             {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'},
             {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': 'index_repository'}},
-            {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call', 'params': {'name': 'search_code', 'arguments': {'query': 'login'}}},
+            {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call', 'params': {'name': 'get_context', 'arguments': {'query': 'login'}}},
         ]
         proc = subprocess.run([sys.executable, '-m', 'codemanager', 'serve', '--repo', str(self.root)], input='\n'.join(map(json.dumps, requests))+'\n', capture_output=True, text=True, check=True)
         responses = [json.loads(line) for line in proc.stdout.splitlines()]
         self.assertEqual(len(responses), 4)
-        self.assertEqual(len(responses[1]['result']['tools']), 10)
+        names = {tool['name'] for tool in responses[1]['result']['tools']}
+        self.assertEqual(len(names), 9)
+        self.assertIn('get_context', names)
+        self.assertFalse({'search_code','retrieve_nodes'} & names)
         self.assertFalse(responses[-1]['result']['isError'])
         self.assertTrue(json.loads(responses[-1]['result']['content'][0]['text'])['results'])
 

@@ -2,9 +2,10 @@
 
 The coding workflow is:
 
-1. Search against the request or current requirements.
-2. Retrieve relevant graph node IDs and their related nodes.
-3. Refine the query or continue a truncated node when evidence is incomplete.
+1. Start with the prompt-hook source and relationship hints; stop if sufficient.
+2. Batch independent gaps into one `get_context` call, using questions, exact
+   symbols, or selected node IDs. It includes bounded expansion already.
+3. Continue incomplete nodes with batched per-node offsets when needed.
 4. Only then read focused source ranges for a specific unresolved gap.
 
 Whole-file reads are not the coding default. Review is a separate file-by-file
@@ -14,7 +15,42 @@ source. Unchecked requirements remain unresolved and must fail review.
 
 ## MCP and CLI
 
-`retrieve_nodes` accepts `node_ids`, `budget` (default 6000 serialized bytes),
+Prefer `get_context` or the `context` CLI for fewer agent round trips:
+
+```bash
+python -m codemanager context --repo . \
+  --query 'Where is a request validated?' --query 'Where is it saved?'
+python -m codemanager context --repo . \
+  --symbol validate --symbol persist --symbol package.module.Handler.handle
+python -m codemanager context --repo . \
+  --cursor 'app.py:4:calculate=1800' --cursor 'other.py:10:save=600'
+```
+
+MCP accepts `query` or up to eight `queries`, up to twenty `symbols` and `node_ids`,
+and an `offsets` mapping from requested node IDs to character offsets. Symbols
+accept exact/qualified names or `path.py:symbol`; ambiguous matches remain visible,
+and stale IDs or missing names appear under `unresolved` without discarding other
+matches. Exact-symbol/node-only requests bypass embeddings. The default shared
+budget is 12,000 serialized bytes and the default selection limit is eight.
+
+This operation combines discovery, selected source, and bounded one-hop context.
+Small definitions are completed where the shared budget permits, rather than
+always stopping at 1,200 characters. Each selection starts with a small excerpt;
+remaining space first completes smaller primary definitions, then related ones.
+Individual excerpts remain bounded at 6,000 source characters. Containers stay
+compact relationship pointers; matched sections of larger definitions use precise
+continuation offsets. Source overlaps are filtered across the whole response.
+`pending` exposes deferred selections, and returned `next_offset` values resume
+incomplete excerpts. Neither IDs nor coverage are assumed current across calls.
+
+`get_context` is the only advertised MCP retrieval tool. No additional expansion
+is required when sufficient evidence is returned. Read focused source ranges only
+for a specific unresolved gap. Old MCP retrieval names are rejected with guidance
+to use `get_context`; the lower-level CLI and Python interfaces remain available.
+
+The lower-level operation remains available for targeted and legacy pagination:
+
+The Python `Graph.retrieve_nodes` method accepts `node_ids`, `budget` (default 6000 serialized bytes),
 `limit` (default eight results), `include_related` (default true),
 `include_requested` (default true), and `offset` (default zero). Use IDs returned
 by the current search; IDs include line numbers and may change after edits.

@@ -150,7 +150,7 @@ class HybridTests(unittest.TestCase):
 
     def test_mcp_uses_hybrid_and_preserves_json_protocol(self):
         request = {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{
-            'name':'search_code','arguments':{'query':'allow people into protected areas'}}}
+            'name':'get_context','arguments':{'query':'allow people into protected areas'}}}
         output = io.StringIO()
         with patch('sys.stdin', io.StringIO(json.dumps(request)+'\n')), patch('sys.stdout', output):
             serve(self.graph, mode='hybrid')

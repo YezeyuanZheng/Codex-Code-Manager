@@ -1,4 +1,4 @@
-{"table":"files","values":["tests/test_automation.py","2397b7119b531b8f2f7f3d9ecbf47b0c4d0f6f0dc8c9d3f6fe84c8a80c400e9c"]}
+{"table":"files","values":["tests/test_automation.py","dc5cedc9b9dcdf1446082155aaa63dbfa6258a374e6c7d0dc1723b421a9f11fb"]}
 {"table":"nodes","values":["tests/test_automation.py:100:AutomationTests.test_staged_check_rejects_obsolete_shards","tests/test_automation.py","AutomationTests.test_staged_check_rejects_obsolete_shards","function",100,109,"[]"]}
 {"table":"nodes","values":["tests/test_automation.py:111:AutomationTests.test_existing_hook_and_custom_hooks_path_are_preserved","tests/test_automation.py","AutomationTests.test_existing_hook_and_custom_hooks_path_are_preserved","function",111,120,"[]"]}
 {"table":"nodes","values":["tests/test_automation.py:121:module_121","tests/test_automation.py","module_121","chunk",121,177,"[]"]}

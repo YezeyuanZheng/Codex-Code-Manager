@@ -6,6 +6,13 @@ from .source_coverage import SourceCoverage, add_reference, source_item
 
 
 class GraphSearch:
+    def get_context(self, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
+                    budget=12000, limit=8, mode=None, model=None, include_related=True):
+        from .code_context import get_context
+        with snapshot_lock(self.cache_dir):
+            return get_context(self, query, queries, symbols, node_ids, offsets,
+                               budget, limit, mode, model, include_related)
+
     def retrieve_nodes(self, node_ids, budget=6000, limit=8, include_related=True, offset=0, include_requested=True):
         from .node_context import retrieve
         with snapshot_lock(self.cache_dir):
@@ -33,9 +40,9 @@ class GraphSearch:
         with snapshot_lock(self.cache_dir):
             return self._search(query, budget, limit, mode, model)
 
-    def _search(self, query, budget=6000, limit=8, mode=None, model=None):
-        if not 256 <= budget <= 100000 or not 1 <= limit <= 50:
-            raise ValueError('budget must be 256..100000 bytes; limit must be 1..50')
+    def _search_candidates(self, query, limit=8, mode=None, model=None):
+        if not 1 <= limit <= 50:
+            raise ValueError('limit must be 1..50')
         mode = mode or os.environ.get('CODEMANAGER_SEARCH_MODE', 'hybrid')
         if mode not in ('hybrid', 'bm25', 'semantic'):
             raise ValueError('mode must be hybrid, bm25, or semantic')
@@ -76,6 +83,12 @@ class GraphSearch:
                 if row['id'] not in known:
                     known.add(row['id'])
                     candidates.append((dict(row), 'graph_neighbor'))
+        return candidates, provider, mode
+
+    def _search(self, query, budget=6000, limit=8, mode=None, model=None):
+        if not 256 <= budget <= 100000 or not 1 <= limit <= 50:
+            raise ValueError('budget must be 256..100000 bytes; limit must be 1..50')
+        candidates, provider, mode = self._search_candidates(query, limit, mode, model)
         # Budget includes serialized metadata and escaping, not just source bodies.
         output = {'results': [], 'budget_bytes': budget, 'truncated': False, 'mode': mode,
                   'model': getattr(provider, 'model_name', provider.identity) if provider is not None else None}
