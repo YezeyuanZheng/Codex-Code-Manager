@@ -31,17 +31,51 @@ and an `offsets` mapping from requested node IDs to character offsets. Symbols
 accept exact/qualified names or `path.py:symbol`; ambiguous matches remain visible,
 and stale IDs or missing names appear under `unresolved` without discarding other
 matches. Exact-symbol/node-only requests bypass embeddings. The default shared
-budget is 12,000 serialized bytes and the default selection limit is eight.
+budget is 12,000 serialized bytes. Omitting `limit` sizes selection to the budget
+and explicit requests (at least eight slots, at most fifty); an explicit `limit`
+remains a hard maximum. Mixed requests retain room for query matches.
+The shared byte parameter is named `budget` in requests and responses. The
+deprecated `budget_bytes` input (CLI `--budget-bytes`) is accepted as an alias;
+supplying both names requires equal values.
 
 This operation combines discovery, selected source, and bounded one-hop context.
 Small definitions are completed where the shared budget permits, rather than
 always stopping at 1,200 characters. Each selection starts with a small excerpt;
-remaining space first completes smaller primary definitions, then related ones.
+remaining space first completes explicit definitions, then search matches, then
+related definitions, preferring smaller definitions within each group.
+Query discovery considers a larger candidate pool and prefers implementation
+functions over containers. Mixed implementation/test questions interleave a small
+supporting test share; merely mentioning tests does not promote all test hits. Some
+selection slots are reserved for related bodies, falling back to search matches
+when no useful neighbors exist. Related bodies are ranked against the question.
+Missing symbols can include current-name suggestions; suggestions are not silently
+substituted. A question paired with a large class selects matching indexed members
+instead of blindly returning the class prefix. Indexed, AST-checked call-name matches supplement
+graph edges for attribute calls; `text_call_candidate` is a candidate relationship,
+not a resolved receiver type. No source-tree scan is required for this expansion.
 Individual excerpts remain bounded at 6,000 source characters. Containers stay
 compact relationship pointers; matched sections of larger definitions use precise
 continuation offsets. Source overlaps are filtered across the whole response.
 `pending` exposes deferred selections, and returned `next_offset` values resume
-incomplete excerpts. Neither IDs nor coverage are assumed current across calls.
+incomplete excerpts. Each result includes a ready-to-use `citation` path and line.
+
+Responses with a budget of at least 1,000 bytes include `context_token`. Pass it in
+MCP or `--context-token TOKEN` to reuse prior emitted source coverage, including
+partial excerpts; without a token each call starts independently. Each file's
+indexed digest is checked, so edited files become eligible again while unchanged
+files retain coverage. Tokens are immutable local receipts: branches do not change
+one another, and the newest 128 receipts are retained. Expired tokens return a
+clear error; retry without one. `include_seen: true` / `--include-seen` rereads prior
+source. Covered nodes keep reference pointers; this does not suppress separate
+shell reads. Receipts never authorize assuming old source is current after edits.
+
+Use `mode: "bm25"` or `bm25_only: true` for keyword-only retrieval with no model
+initialization or query embeddings. The CLI accepts `--bm25-only`; save defaults
+with `retrieval-mode --repo . --set bm25` (or `hybrid`). The prompt hook follows
+that saved mode. MCP is repository-bound: omit `repo`; use `budget`, not
+`max_bytes`. Example: `{"query":"Where is validation implemented?","budget":12000}`.
+`truncated: false` describes the selected source ranges; it does not guarantee
+that every part of the user's question has been answered.
 
 `get_context` is the only advertised MCP retrieval tool. No additional expansion
 is required when sufficient evidence is returned. Read focused source ranges only

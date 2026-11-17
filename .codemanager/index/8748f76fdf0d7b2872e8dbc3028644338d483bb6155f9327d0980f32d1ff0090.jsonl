@@ -1,9 +1,9 @@
-{"table":"files","values":["codemanager/context_cli.py","584f0114bea2987c837e634ae0a671acf057e8e00170db5889d965660b8facab"]}
+{"table":"files","values":["codemanager/context_cli.py","4703d8594c166a3d43cfb0acebabf5a93c9908a26998751948caaf3e8780fa2a"]}
 {"table":"files","values":["tests/test_file_limits.py","4e8daec0ccf218d86411bbf37f54e20065a98c8512b5700895e7647d533cff0c"]}
-{"table":"nodes","values":["codemanager/context_cli.py:16:run","codemanager/context_cli.py","run","function",16,29,"[]"]}
-{"table":"nodes","values":["codemanager/context_cli.py:1:codemanager/context_cli.py","codemanager/context_cli.py","codemanager/context_cli.py","file",1,29,"[]"]}
-{"table":"nodes","values":["codemanager/context_cli.py:1:module_1","codemanager/context_cli.py","module_1","chunk",1,29,"[]"]}
-{"table":"nodes","values":["codemanager/context_cli.py:4:configure","codemanager/context_cli.py","configure","function",4,13,"[]"]}
+{"table":"nodes","values":["codemanager/context_cli.py:19:run","codemanager/context_cli.py","run","function",19,34,"[]"]}
+{"table":"nodes","values":["codemanager/context_cli.py:1:codemanager/context_cli.py","codemanager/context_cli.py","codemanager/context_cli.py","file",1,34,"[]"]}
+{"table":"nodes","values":["codemanager/context_cli.py:1:module_1","codemanager/context_cli.py","module_1","chunk",1,34,"[]"]}
+{"table":"nodes","values":["codemanager/context_cli.py:4:configure","codemanager/context_cli.py","configure","function",4,16,"[]"]}
 {"table":"nodes","values":["tests/test_file_limits.py:101:FileLimitTests.test_migrate_review_only_settings_without_enabling_review","tests/test_file_limits.py","FileLimitTests.test_migrate_review_only_settings_without_enabling_review","function",101,110,"[]"]}
 {"table":"nodes","values":["tests/test_file_limits.py:112:FileLimitTests.test_standalone_cli_and_revoked_review_flags","tests/test_file_limits.py","FileLimitTests.test_standalone_cli_and_revoked_review_flags","function",112,123,"[]"]}
 {"table":"nodes","values":["tests/test_file_limits.py:125:FileLimitTests.test_changed_scope_exclusions_and_full_audit","tests/test_file_limits.py","FileLimitTests.test_changed_scope_exclusions_and_full_audit","function",125,137,"[]"]}
@@ -15,7 +15,7 @@
 {"table":"nodes","values":["tests/test_file_limits.py:54:FileLimitTests.test_limit_settings_validation_and_staged_policy","tests/test_file_limits.py","FileLimitTests.test_limit_settings_validation_and_staged_policy","function",54,69,"[]"]}
 {"table":"nodes","values":["tests/test_file_limits.py:71:FileLimitTests.test_deleted_oversized_file_is_allowed_and_non_utf8_new_text_is_bounded","tests/test_file_limits.py","FileLimitTests.test_deleted_oversized_file_is_allowed_and_non_utf8_new_text_is_bounded","function",71,86,"[]"]}
 {"table":"nodes","values":["tests/test_file_limits.py:88:FileLimitTests.test_disabled_review_still_blocks_completion_and_commit","tests/test_file_limits.py","FileLimitTests.test_disabled_review_still_blocks_completion_and_commit","function",88,99,"[]"]}
-{"table":"edges","values":["codemanager/context_cli.py:1:codemanager/context_cli.py","codemanager/context_cli.py:16:run","contains"]}
+{"table":"edges","values":["codemanager/context_cli.py:1:codemanager/context_cli.py","codemanager/context_cli.py:19:run","contains"]}
 {"table":"edges","values":["codemanager/context_cli.py:1:codemanager/context_cli.py","codemanager/context_cli.py:1:module_1","contains"]}
 {"table":"edges","values":["codemanager/context_cli.py:1:codemanager/context_cli.py","codemanager/context_cli.py:4:configure","contains"]}
 {"table":"edges","values":["tests/test_file_limits.py:1:tests/test_file_limits.py","codemanager/__init__.py:1:codemanager/__init__.py","imports_candidate"]}
@@ -34,9 +34,9 @@
 {"table":"edges","values":["tests/test_file_limits.py:21:FileLimitTests","tests/test_file_limits.py:71:FileLimitTests.test_deleted_oversized_file_is_allowed_and_non_utf8_new_text_is_bounded","contains"]}
 {"table":"edges","values":["tests/test_file_limits.py:21:FileLimitTests","tests/test_file_limits.py:88:FileLimitTests.test_disabled_review_still_blocks_completion_and_commit","contains"]}
 {"table":"edges","values":["tests/test_file_limits.py:88:FileLimitTests.test_disabled_review_still_blocks_completion_and_commit","codemanager/review.py:1:codemanager/review.py","imports_candidate"]}
-{"table":"refs","values":["codemanager/context_cli.py:16:run","ValueError","calls"]}
-{"table":"refs","values":["codemanager/context_cli.py:16:run","int","calls"]}
-{"table":"refs","values":["codemanager/context_cli.py:16:run","list","calls"]}
+{"table":"refs","values":["codemanager/context_cli.py:19:run","ValueError","calls"]}
+{"table":"refs","values":["codemanager/context_cli.py:19:run","int","calls"]}
+{"table":"refs","values":["codemanager/context_cli.py:19:run","list","calls"]}
 {"table":"refs","values":["tests/test_file_limits.py:101:FileLimitTests.test_migrate_review_only_settings_without_enabling_review","settings","calls"]}
 {"table":"refs","values":["tests/test_file_limits.py:112:FileLimitTests.test_standalone_cli_and_revoked_review_flags","str","calls"]}
 {"table":"refs","values":["tests/test_file_limits.py:112:FileLimitTests.test_standalone_cli_and_revoked_review_flags","str","calls"]}

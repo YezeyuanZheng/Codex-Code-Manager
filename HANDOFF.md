@@ -1,0 +1,140 @@
+# Retrieval work handoff — 2026-11-17
+
+Start here when continuing this work. Usage is in [README.md](README.md); the
+information-efficiency rubric is in [docs/retrieval-evaluation.md](docs/retrieval-evaluation.md).
+
+## Current implementation
+
+- `get_context` remains the only advertised MCP code-retrieval tool. Legacy MCP
+  `search_code` / `retrieve_nodes` names remain rejected; legacy CLI/library
+  operations still exist. Do not restore the old MCP tools merely for expansion.
+- `budget` is the canonical request/response parameter. `budget_bytes` is a
+  compatibility input alias; conflicting values fail. Unknown arguments such as
+  `repo` and `max_bytes` produce actionable errors. MCP is repository-bound.
+- Selection preserves query matches alongside explicit symbols, sizes omitted
+  node limits to the byte budget, ranks related bodies against the question,
+  distinguishes implementation-plus-tests from test-only questions, suggests
+  current names for missing symbols, and focuses large requested classes on
+  matching members. Explicit `limit` values remain hard maxima.
+- Indexed AST-checked call-name candidates supplement graph edges for attribute
+  calls. These are hints, not resolved receiver types or proven call paths.
+- Responses of at least 1,000 bytes include an explicit `context_token`. Pass it
+  into follow-ups to skip previously emitted source. Receipts are immutable,
+  retain the newest 128 entries, and validate each file's indexed digest. Changed
+  files become eligible again. `include_seen: true` forces rereading. Partial
+  continuations and source citations are preserved. Shell reads are not deduped.
+- BM25-only is available through `--bm25-only`, MCP `bm25_only: true`, or
+  `mode: "bm25"`. A server started with `--bm25-only` rejects embedding-backed
+  overrides. The prompt hook now follows the configured mode rather than forcing
+  hybrid. Request/CLI mode overrides environment, saved mode, then hybrid default.
+- Hybrid caches decoded vectors in a NumPy matrix (stdlib fallback), batches query
+  embeddings, and reuses synchronization across a request. SQLite generation
+  counters track source/vector changes separately from file-stat bookkeeping.
+- Content-digest reuse preserves vectors after line-number/node-ID shifts.
+  Orphan reuse is bounded and model-specific. Regeneration remains transactional.
+  `embed --progress` prints completed/total counts to stderr.
+
+Useful commands, using the installed environment:
+
+```bash
+.venv/bin/python -m codemanager retrieval-mode --repo .
+.venv/bin/python -m codemanager retrieval-mode --repo . --set bm25
+.venv/bin/python -m codemanager context --repo . --query 'QUESTION' --bm25-only
+.venv/bin/python -m codemanager retrieval-mode --repo . --set hybrid
+```
+
+The saved mode was not changed for this checkout; its effective default is hybrid.
+Local `.codex/` hook configuration is intentionally untracked. Hook installation
+for other clones is documented in README; do not accidentally commit this local
+configuration with implementation changes.
+
+## Latest actual Codex comparison
+
+Used the real pytest repository at commit
+`36eed6b7b0eb59760fc4b33e90bdaac5057388f0`: 274 Python files, 117,613 lines.
+The earlier synthetic checkout was removed and was not used in reported results.
+
+Twelve transport-clean fresh sessions: four questions × default/hybrid/BM25,
+with frozen source and retrieval package, matched model/reasoning settings,
+balanced arm ordering, real hook output and native MCP. Shell fallback remained
+available. Questions cover keyword selection, capture phases/failure, fixture
+teardown, and plugin autoload/exclusions. Saved real vectors were warmed.
+
+Totals across four questions per arm (decimal kB; tokens are cumulative, not peak
+context-window occupancy):
+
+| Arm | Tool calls | Output bytes | Input tokens | Seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Default Codex | 19 | 243,064 | 553,069 | 178.111 |
+| Updated hybrid | 17 | 213,415 | 469,950 | 190.087 |
+| BM25-only | 21 | 228,240 | 504,958 | 189.636 |
+
+Hybrid used 10.5% fewer calls, 12.2% less output, and 15.0% fewer cumulative input
+tokens than default, but took 6.7% longer. BM25 and hybrid were essentially tied
+on elapsed time. Do not claim a universal speed improvement from this small set.
+
+All arms eventually retrieved 17/17 required implementation units and passed
+16/16 factual checks per arm. Hook plus MCP alone covered **14/17 for hybrid**
+and **16/17 for BM25**; shell reads supplied remaining evidence. Every scored MCP
+call used the context token, with no mode contamination or failed retrieval calls.
+
+Source-information audit, using unique source characters:
+
+| Arm | Judged relevant | Unrelated | Uncertain | Repeated exposure |
+| --- | ---: | ---: | ---: | ---: |
+| Default | 61.95% | 14.80% | 23.24% | 7.93% |
+| Hybrid | 68.11% | 14.70% | 17.19% | 9.06% |
+| BM25 | 68.44% | 12.29% | 19.27% | 9.27% |
+
+Relevant includes preregistered core/support plus audited useful extras. Beyond
+core, unique source was 160,360 characters for default, 115,916 for hybrid, and
+123,829 for BM25. Extra is not synonymous with waste. Important unique source /
+all source exposure was 57.04%, 61.94%, and 62.10%, respectively.
+
+The audit pooled 724 extra source units without arm labels. It is a same-assistant
+function/block relevance judgment, not independent, perfectly blinded, or a
+minimum-necessary-token measurement. Uncertain source remains separate. Citation
+coordinates passed; exhaustive semantic validation of every citation is not claimed.
+
+One BM25 run included DNS/WebSocket/HTTPS reconnection delays (168.636 seconds).
+It was retained and retried using the first transport-clean run, not the fastest.
+This retry rule was disclosed after observing the outage. Initial runner config
+failures happened before question sessions and are archived separately.
+
+Supplemental backend diagnostics (not substitutes for actual Codex results):
+first hybrid query 1,540 ms, repeated hybrid 92 ms, two-query batch 183 ms, BM25
+40 ms, exact symbol lookup 5 ms. Previous first-use pytest embedding generation
+required about 45 minutes for 12,459 passages; this comparison reused all vectors.
+BM25 avoids model initialization and document/query embedding costs entirely.
+
+## Artifacts and next session
+
+Raw artifacts are local and Git-ignored; they survive a new session in this same
+workspace, but will not accompany a new clone:
+
+- `.codemanager/retrieval-eval-v4/report.json` — final aggregate report.
+- `.codemanager/retrieval-eval-v4/summary.csv` — per-question results.
+- `cases.json`, `metrics.json` — frozen questions, references, rubric.
+- `measurements.json`, `information.json`, `structured-recall.json` — source
+  mapping, important/extra/repeated information, and CodeManager-only coverage.
+- `extra-source-pool.json`, `extra-source-audit.json`, `quality.json` — audits.
+- `*.events.jsonl`, `*.timeline.json`, `*.answer.txt`, `*.hook.json` — raw traces.
+- `protocol-amendments.json`, `transport-affected/`, `invalid-*` — exclusions and
+  retained infrastructure failures.
+- `setup.json` identifies the frozen source/tool package under
+  `/tmp/codemanager-eval-v4-122o8yeq`; temporary directories may be cleaned later.
+- Earlier comparisons remain under `.codemanager/retrieval-eval-v2/` and `-v3/`.
+
+Remaining work: improve core-evidence coverage and avoid shell rereads; do not
+increase byte budgets blindly. Hybrid still missed the two setup/call capture
+wrappers and `call_fixture_func` in hook/MCP evidence. BM25 missed `Config.parse`.
+Correct final answers must not conceal those retrieval gaps. Larger repeated and
+independent-repository evaluations are needed for reliable speed conclusions.
+
+If reusing the analyzer, include hook observations for both `hybrid` and `bm25`
+arm names; an old `arm == 'codemanager'` condition silently omitted hook evidence.
+The final v4 measurements corrected this and include hook bytes and source.
+
+Validation at handoff: 145 unit tests passed, one optional real-model test skipped;
+portable graph and file-length checks passed. Optional independent review is
+currently disabled. Follow AGENTS.md for graph refresh, staged checks, and commits.

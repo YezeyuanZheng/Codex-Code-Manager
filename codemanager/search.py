@@ -7,11 +7,23 @@ from .source_coverage import SourceCoverage, add_reference, source_item
 
 class GraphSearch:
     def get_context(self, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
-                    budget=12000, limit=8, mode=None, model=None, include_related=True):
+                    budget=None, limit=None, mode=None, model=None, include_related=True, budget_bytes=None,
+                    bm25_only=False, context_token=None, include_seen=False, **unknown):
         from .code_context import get_context
+        if unknown:
+            raise ValueError('Unknown get_context parameter(s): '+', '.join(sorted(unknown))+
+                             '. Repository is already bound; omit repo. Use budget for byte limits. '
+                             'Example: {"query":"QUESTION","budget":12000,"mode":"bm25"}')
         with snapshot_lock(self.cache_dir):
-            return get_context(self, query, queries, symbols, node_ids, offsets,
-                               budget, limit, mode, model, include_related)
+            self._context_queries = ([query] if query else []) + (queries or []) if isinstance(queries, (list, type(None))) else []
+            self._prepared_query_vectors = {}
+            try:
+                return get_context(self, query, queries, symbols, node_ids, offsets,
+                                   budget, limit, mode, model, include_related, budget_bytes,
+                                   bm25_only, context_token, include_seen)
+            finally:
+                self._context_queries = None
+                self._prepared_query_vectors = {}
 
     def retrieve_nodes(self, node_ids, budget=6000, limit=8, include_related=True, offset=0, include_requested=True):
         from .node_context import retrieve
@@ -31,10 +43,10 @@ class GraphSearch:
             self._provider_model = selected
         return self._embedder
 
-    def embed(self, model=None):
+    def embed(self, model=None, progress=None):
         from .embeddings import sync_embeddings
         with snapshot_lock(self.cache_dir):
-            return sync_embeddings(self, self.embedding_provider(model))
+            return sync_embeddings(self, self.embedding_provider(model), progress=progress)
 
     def search(self, query, budget=6000, limit=8, mode=None, model=None):
         with snapshot_lock(self.cache_dir):
@@ -43,7 +55,8 @@ class GraphSearch:
     def _search_candidates(self, query, limit=8, mode=None, model=None):
         if not 1 <= limit <= 50:
             raise ValueError('limit must be 1..50')
-        mode = mode or os.environ.get('CODEMANAGER_SEARCH_MODE', 'hybrid')
+        from .retrieval_settings import selected_mode
+        mode = selected_mode(self.repo, mode)
         if mode not in ('hybrid', 'bm25', 'semantic'):
             raise ValueError('mode must be hybrid, bm25, or semantic')
         if not isinstance(query, str) or not query.strip():

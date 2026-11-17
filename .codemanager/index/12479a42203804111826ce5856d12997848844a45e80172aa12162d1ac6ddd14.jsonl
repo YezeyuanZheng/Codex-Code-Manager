@@ -1,0 +1,6 @@
+{"table":"files","values":["codemanager/cache_revisions.py","07d6fa6336c535167345f8fdbe2ca52d84df6f156b6a6b143cfec775a5d1b32b"]}
+{"table":"nodes","values":["codemanager/cache_revisions.py:1:codemanager/cache_revisions.py","codemanager/cache_revisions.py","codemanager/cache_revisions.py","file",1,21,"[]"]}
+{"table":"nodes","values":["codemanager/cache_revisions.py:1:module_1","codemanager/cache_revisions.py","module_1","chunk",1,21,"[]"]}
+{"table":"nodes","values":["codemanager/cache_revisions.py:4:install","codemanager/cache_revisions.py","install","function",4,21,"[]"]}
+{"table":"edges","values":["codemanager/cache_revisions.py:1:codemanager/cache_revisions.py","codemanager/cache_revisions.py:1:module_1","contains"]}
+{"table":"edges","values":["codemanager/cache_revisions.py:1:codemanager/cache_revisions.py","codemanager/cache_revisions.py:4:install","contains"]}

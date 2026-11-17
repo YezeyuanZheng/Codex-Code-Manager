@@ -59,6 +59,16 @@ class FastEmbedder:
             raise EmbeddingError(f'Local query embedding failed: {exc}') from exc
 
 
+    def queries(self, texts):
+        try:
+            with redirect_stdout(sys.stderr):
+                return list(self.model().query_embed(texts, batch_size=BATCH_SIZE))
+        except EmbeddingError:
+            raise
+        except Exception as exc:
+            raise EmbeddingError(f'Local query embedding failed: {exc}') from exc
+
+
 def normalize(vector):
     try:
         values = [float(value) for value in vector]
@@ -98,7 +108,7 @@ def passages(node):
         yield header+body, start, end, body
 
 
-def sync_embeddings(graph, embedder, *, cache_db=None):
+def sync_embeddings(graph, embedder, *, cache_db=None, progress=None):
     """Refresh only missing/stale passages. Cache identity includes the model version."""
     model = embedder.identity
     cache = cache_db if cache_db is not None else graph.db
@@ -108,14 +118,33 @@ def sync_embeddings(graph, embedder, *, cache_db=None):
     for node in nodes:
         for chunk, (text, _, _, _) in enumerate(passages(node)):
             expected[(node['id'], chunk)] = (hashlib.sha256(text.encode()).hexdigest(), text)
-    cached = {(row['node_id'], row['chunk']): row['digest'] for row in cache.execute(
-        'SELECT node_id,chunk,digest FROM embeddings WHERE model=?', (model,))}
+    rows = cache.execute('SELECT node_id,chunk,digest,vector FROM embeddings WHERE model=?', (model,)).fetchall()
+    cached = {(row['node_id'], row['chunk']): row['digest'] for row in rows}
+    by_digest = {row['digest']: row['vector'] for row in rows}
+    has_reuse = cache.execute("SELECT 1 FROM sqlite_master WHERE name='embedding_reuse'").fetchone()
+    if has_reuse:
+        by_digest.update({row['digest']:row['vector'] for row in cache.execute(
+            'SELECT digest,vector FROM embedding_reuse WHERE model=?', (model,))})
     missing = [(key, digest, text) for key, (digest, text) in expected.items() if cached.get(key) != digest]
+    reused = [(key, digest, by_digest[digest]) for key, digest, _ in missing if digest in by_digest]
+    missing = [(key, digest, text) for key, digest, text in missing if digest not in by_digest]
+    from time import perf_counter
+    started = perf_counter()
+    def report(completed):
+        if progress is not None:
+            progress({'completed':completed,'total':len(missing),'reused':len(reused),
+                      'elapsed_seconds':round(perf_counter()-started,3)})
+    report(0)
     with cache:
         # Keep a single current model cache, not historical vectors.
         cache.execute('DELETE FROM embeddings WHERE model!=?', (model,))
+        if has_reuse:
+            cache.execute('DELETE FROM embedding_reuse WHERE model!=?', (model,))
         for key in cached.keys() - expected.keys():
             cache.execute('DELETE FROM embeddings WHERE node_id=? AND chunk=? AND model=?', (*key, model))
+        for (ident, chunk), digest, vector in reused:
+            cache.execute('INSERT OR REPLACE INTO embeddings VALUES (?,?,?,?,?)',
+                          (ident, chunk, model, digest, vector))
         dimension = None
         for offset in range(0, len(missing), BATCH_SIZE):
             batch = missing[offset:offset+BATCH_SIZE]
@@ -129,26 +158,13 @@ def sync_embeddings(graph, embedder, *, cache_db=None):
                 dimension = len(values)
                 cache.execute('INSERT OR REPLACE INTO embeddings VALUES (?,?,?,?,?)',
                                  (ident, chunk, model, digest, pack(values)))
-    return {'model': model, 'embedded_passages': len(missing), 'cached_passages': len(expected)}
+            report(min(offset+BATCH_SIZE, len(missing)))
+    return {'model': model, 'embedded_passages': len(missing), 'cached_passages': len(expected), 'reused_passages': len(reused)}
 
 
 def dense_search(graph, embedder, query, limit):
-    sync_embeddings(graph, embedder)
-    vector = normalize(embedder.query(query))
-    best = {}
-    for row in graph.db.execute('SELECT node_id,chunk,vector FROM embeddings WHERE model=?', (embedder.identity,)):
-        values = unpack(row['vector'])
-        if len(values) != len(vector):
-            raise EmbeddingError('Query and cached vector dimensions differ; rebuild with a consistent model')
-        # Normalized dot product is cosine similarity.
-        score = math.fsum(a*b for a, b in zip(vector, values, strict=True))
-        if score <= 0:
-            continue
-        previous = best.get(row['node_id'])
-        if previous is None or score > previous[0]:
-            best[row['node_id']] = (score, row['chunk'])
-    return [(ident, score, chunk) for ident, (score, chunk) in
-            sorted(best.items(), key=lambda item: (-item[1][0], item[0]))[:limit]]
+    from .vector_search import search
+    return search(graph, embedder, query, limit)
 
 
 def fuse(lexical, semantic, limit, constant=60):

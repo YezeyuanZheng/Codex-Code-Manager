@@ -58,6 +58,8 @@ class Graph(GraphSearch):
             CREATE INDEX IF NOT EXISTS edges_target ON edges(target);
             CREATE TABLE IF NOT EXISTS embeddings(node_id TEXT, chunk INTEGER, model TEXT,
                 digest TEXT, vector BLOB, PRIMARY KEY(node_id,chunk,model));
+            CREATE TABLE IF NOT EXISTS embedding_reuse(model TEXT,digest TEXT,vector BLOB,
+                PRIMARY KEY(model,digest));
             CREATE TABLE IF NOT EXISTS refs(source TEXT, name TEXT, kind TEXT);
             CREATE INDEX IF NOT EXISTS refs_source ON refs(source);
             CREATE INDEX IF NOT EXISTS refs_name ON refs(kind,name);
@@ -71,6 +73,8 @@ class Graph(GraphSearch):
             for row in self.db.execute('SELECT path FROM files WHERE bucket IS NULL').fetchall():
                 self.db.execute('UPDATE files SET bucket=? WHERE path=?', (bucket_for(row[0]), row[0]))
         self.db.execute('CREATE INDEX IF NOT EXISTS files_bucket ON files(bucket)')
+        from .cache_revisions import install
+        install(self.db)
         try:
             if load_snapshot:
                 self.load_bundled_snapshot()
@@ -276,6 +280,9 @@ class Graph(GraphSearch):
             resolved = self.resolve_changes(affected) if affected else 0
             self.mark_dirty(affected)
             if affected:
+                self.db.execute('''INSERT OR IGNORE INTO embedding_reuse
+                    SELECT model,digest,vector FROM embeddings WHERE node_id NOT IN (SELECT id FROM nodes)''')
+                self.db.execute('DELETE FROM embedding_reuse WHERE rowid NOT IN (SELECT rowid FROM embedding_reuse ORDER BY rowid DESC LIMIT 10000)')
                 self.db.execute('DELETE FROM embeddings WHERE node_id NOT IN (SELECT id FROM nodes)')
             if revision and revision != previous:
                 self.db.execute("INSERT OR REPLACE INTO metadata VALUES ('revision',?)", (revision,))

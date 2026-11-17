@@ -1,0 +1,4 @@
+{"table":"files","values":["docs/retrieval-evaluation.md","2cf5624527152697ea076f9ef859c04fa236bc726eb0f8a3c49e1b5ff5619d0e"]}
+{"table":"nodes","values":["docs/retrieval-evaluation.md:1:chunk_1","docs/retrieval-evaluation.md","chunk_1","chunk",1,44,"[]"]}
+{"table":"nodes","values":["docs/retrieval-evaluation.md:1:docs/retrieval-evaluation.md","docs/retrieval-evaluation.md","docs/retrieval-evaluation.md","file",1,40,"[]"]}
+{"table":"edges","values":["docs/retrieval-evaluation.md:1:docs/retrieval-evaluation.md","docs/retrieval-evaluation.md:1:chunk_1","contains"]}

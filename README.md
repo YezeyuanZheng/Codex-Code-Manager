@@ -1,5 +1,8 @@
 # CodeManager
 
+Continuing the retrieval work? Read [HANDOFF.md](HANDOFF.md) for the current
+implementation, real Codex evaluation results, artifacts, and remaining gaps.
+
 A local repository index for coding agents. CodeManager combines BM25 keyword
 search with local embedding cosine similarity, then returns graph-related source
 snippets under an explicit output budget. Describe a feature or intended code
@@ -24,7 +27,11 @@ vectors automatically. Restart the MCP server using this environment's Python.
 If you need keyword-only operation without the embedding dependency or model:
 
 ```bash
-python -m codemanager search --repo /path/to/checkout "authenticate" --mode bm25
+python -m codemanager context --repo /path/to/checkout "authenticate" --bm25-only
+# Save the default for the prompt hook, CLI, library, and unpinned MCP server:
+python -m codemanager retrieval-mode --repo /path/to/checkout --set bm25
+# Enforce keyword-only operation on a server, including per-request overrides:
+python -m codemanager serve --repo /path/to/checkout --bm25-only
 ```
 
 For a GitHub repository, clone it first with your existing Git authentication:
@@ -208,7 +215,10 @@ the model may further tokenize/truncate unusually dense code. No generated
 summaries or LLM calls are used.
 
 Choose `--mode hybrid`, `--mode semantic`, or `--mode bm25` on CLI searches or
-`serve`. MCP `get_context` also accepts a per-request `mode`. Set
+`serve` and `codex-context-hook`. MCP `get_context` also accepts `mode` or
+`bm25_only: true`. An explicit request/CLI mode overrides the environment, then the
+saved `retrieval.mode` in `codemanager.json`, then the hybrid default. A server
+started with `--bm25-only` rejects hybrid/semantic requests. Set
 `CODEMANAGER_SEARCH_MODE=bm25` for an explicit keyword-only default. Hybrid does
 not silently fall back to keyword search when dependency, model, or inference
 setup fails; it returns an actionable error.
@@ -233,14 +243,25 @@ version, model name, preprocessing version, and passage hash. Unchanged passages
 reuse their vectors; changed passages are re-embedded before the next hybrid or
 semantic search, deleted nodes lose their vectors, and model changes replace the
 old model cache. Polling/export keeps graph metadata current without downloading
-a model or running inference. `embed` explicitly warms vectors after edits.
+a model or running inference. `embed --progress` explicitly warms vectors after
+edits and prints completed/total counts to stderr. Reusable content digests retain
+vectors when node IDs move because earlier lines changed; orphan reuse is bounded
+and model-specific, and failed regeneration remains transactional.
 Graph-only checks remain offline and deterministic. The installed pre-commit
 hook additionally requires missing/stale embeddings to be regenerated successfully.
 
-Dense search currently scans the cached vectors exactly in Python. Its cost grows
+Dense search reuses a decoded NumPy matrix (with a standard-library fallback),
+batches query embeddings, and checks source/vector generations once per context
+batch. File-stat bookkeeping does not invalidate the matrix; actual code, mapping,
+vector, or model changes do. Exact cosine search still has a cost that grows
 with passage count times vector dimensions; large repositories may benefit from
 a future approximate nearest-neighbor index. Real-model retrieval quality and
 context savings must be measured on representative feature requests.
+
+For source coverage across calls, pass the returned `context_token` into the next
+`get_context` request; use `include_seen: true` to reread it. Tokens are explicit,
+bounded local derived receipts, with per-file digest checks after edits. See
+[context retrieval](docs/node-context.md) and the [information-efficiency rubric](docs/retrieval-evaluation.md).
 
 ## Switch embedding models
 

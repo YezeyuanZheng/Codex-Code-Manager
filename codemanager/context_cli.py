@@ -8,8 +8,11 @@ def configure(parser):
     parser.add_argument('--node-id', dest='node_ids', action='append')
     parser.add_argument('--cursor', action='append', default=[], metavar='NODE_ID=OFFSET',
                         help='Continue a node; repeat to batch different character offsets')
-    parser.add_argument('--budget', type=int, default=12000)
-    parser.add_argument('--limit', type=int, default=8)
+    parser.add_argument('--budget', type=int, help='Shared serialized byte budget (default: 12000)')
+    parser.add_argument('--budget-bytes', type=int, help='Compatibility alias for --budget')
+    parser.add_argument('--limit', type=int, help='Maximum nodes; automatic when omitted')
+    parser.add_argument('--context-token', help='Reuse a prior response coverage token')
+    parser.add_argument('--include-seen', action='store_true', help='Return previously seen source again')
     parser.add_argument('--no-related', action='store_true')
 
 
@@ -25,5 +28,7 @@ def run(graph, args):
             node_ids.append(ident)
     return graph.get_context(query=args.query, queries=args.queries, symbols=args.symbols,
                              node_ids=node_ids, offsets=offsets, budget=args.budget,
+                             budget_bytes=args.budget_bytes,
                              limit=args.limit, mode=args.mode, model=args.model,
-                             include_related=not args.no_related)
+                             include_related=not args.no_related, context_token=args.context_token,
+                             include_seen=args.include_seen)

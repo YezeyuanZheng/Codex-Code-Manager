@@ -50,9 +50,14 @@ def incoming(graph, interval):
         yield line
 
 
-def serve(graph, interval=1, mode=None):
+def serve(graph, interval=1, mode=None, bm25_only=False):
     """Newline-delimited JSON-RPC over stdio; stdout is protocol-only."""
     tools = tool_catalog()
+    if bm25_only:
+        for tool in tools:
+            if tool['name'] == 'get_context':
+                tool['inputSchema']['properties']['mode']['enum'] = ['bm25']
+                tool['description'] += ' This server is configured for BM25 only; embeddings are disabled.'
     for line in incoming(graph, interval_seconds(interval)):
         request = None
         try:
@@ -78,7 +83,13 @@ def serve(graph, interval=1, mode=None):
                     refreshed = graph.export()
                     if name == 'get_context':
                         args = dict(args)
-                        args.setdefault('mode', mode)
+                        if bm25_only:
+                            if args.get('mode') not in (None, 'bm25'):
+                                raise ValueError('This server is BM25-only; use mode=bm25')
+                            args['mode'] = 'bm25'
+                            args['bm25_only'] = True
+                        if not args.get('bm25_only'):
+                            args.setdefault('mode', mode)
                         value = graph.get_context(**args)
                     elif name == 'get_file_purpose':
                         value = get_file_purpose(graph, **args)
@@ -113,7 +124,7 @@ def serve(graph, interval=1, mode=None):
 def main():
     parser = argparse.ArgumentParser(description='Local repository graph and budgeted code search')
     sub = parser.add_subparsers(dest='command', required=True)
-    for command in ('index', 'export', 'search', 'context', 'stats', 'serve', 'watch', 'check', 'install-hook', 'embed', 'model', 'map-request', 'review-config', 'begin-task', 'complete-task', 'review', 'map-change', 'commit-check', 'file-purpose', 'set-file-purpose', 'file-limits', 'check-length', 'codex-length-hook', 'install-codex-hook', 'codex-context-hook', 'node-context', 'review-evidence'):
+    for command in ('index', 'export', 'search', 'context', 'stats', 'serve', 'watch', 'check', 'install-hook', 'embed', 'model', 'map-request', 'review-config', 'begin-task', 'complete-task', 'review', 'map-change', 'commit-check', 'file-purpose', 'set-file-purpose', 'file-limits', 'check-length', 'codex-length-hook', 'install-codex-hook', 'codex-context-hook', 'retrieval-mode', 'node-context', 'review-evidence'):
         p = sub.add_parser(command)
         p.add_argument('--repo', required=True, help='Path to a local checkout')
         if command in ('watch', 'serve'):
@@ -174,9 +185,13 @@ def main():
             choices = p.add_mutually_exclusive_group()
             choices.add_argument('--set', dest='save_model', metavar='MODEL', help='Save the repository default to codemanager.json')
             choices.add_argument('--reset', action='store_true', help='Remove the saved repository model')
-        if command in ('search', 'context', 'serve'):
-            p.add_argument('--mode', choices=('hybrid', 'bm25', 'semantic'),
-                           default=os.environ.get('CODEMANAGER_SEARCH_MODE', 'hybrid'))
+        if command in ('search', 'context', 'serve', 'codex-context-hook'):
+            p.add_argument('--mode', choices=('hybrid', 'bm25', 'semantic'))
+            p.add_argument('--bm25-only', action='store_true', help='Keyword-only retrieval; never initialize embeddings')
+        if command == 'embed':
+            p.add_argument('--progress', action='store_true', help='Print embedding progress to stderr')
+        if command == 'retrieval-mode':
+            p.add_argument('--set', dest='retrieval_mode', choices=('hybrid', 'bm25', 'semantic'))
         if command in ('index', 'export', 'check'):
             p.add_argument('--full', action='store_true', help='Rebuild or audit from all source files instead of reusing the cache')
         if command == 'check':
@@ -187,6 +202,10 @@ def main():
             p.add_argument('--budget', type=int, default=6000, help='Maximum serialized result bytes')
             p.add_argument('--limit', type=int, default=8)
     args = parser.parse_args()
+    if hasattr(args, 'bm25_only') and args.bm25_only:
+        if args.mode not in (None, 'bm25'):
+            parser.error('--bm25-only conflicts with --mode')
+        args.mode = 'bm25'
     graph = None
     try:
         if args.command == 'review-evidence':
@@ -201,7 +220,7 @@ def main():
             print(json.dumps(install_codex_hook(args.repo)))
             return
         if args.command == 'codex-context-hook':
-            print(json.dumps(prompt_hook(args.repo), ensure_ascii=False))
+            print(json.dumps(prompt_hook(args.repo, mode=args.mode), ensure_ascii=False))
             return
         if args.command == 'codex-length-hook':
             print(json.dumps(stop_hook(args.repo)))
@@ -224,6 +243,10 @@ def main():
             if value.get('status') == 'failed':
                 parser.exit(1)
             return
+        if args.command == 'retrieval-mode':
+            from .retrieval_settings import configure
+            print(json.dumps(configure(args.repo, args.retrieval_mode)))
+            return
         if args.command == 'model':
             print(json.dumps(model_settings(args.repo, save=args.save_model, reset=args.reset), ensure_ascii=False))
             return
@@ -234,7 +257,7 @@ def main():
         graph = Graph(args.repo, load_snapshot=True,
                       embedding_model=getattr(args, 'model', None))
         if args.command == 'serve':
-            serve(graph, args.interval, args.mode)
+            serve(graph, args.interval, args.mode, args.bm25_only)
             return
         if args.command == 'watch':
             watch(graph, args.interval)
@@ -262,7 +285,8 @@ def main():
             value = graph.export(full=args.full)
         elif args.command == 'embed':
             graph.export()
-            value = graph.embed()
+            progress = (lambda value: print(json.dumps({'embedding_progress':value}), file=sys.stderr, flush=True)) if args.progress else None
+            value = graph.embed(progress=progress)
         elif args.command == 'stats':
             graph.export()
             value = graph.stats()
