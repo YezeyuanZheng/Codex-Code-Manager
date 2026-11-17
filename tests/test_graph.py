@@ -63,6 +63,28 @@ class GraphTests(unittest.TestCase):
         (self.root / 'ignored.py').write_text('secret=1')
         self.assertEqual(self.graph.index()['files'], 1)
 
+    def test_imported_call_alias_resolves_to_target_node(self):
+        (self.root/'helpers.py').write_text('def work():\n    return 1\n')
+        (self.root/'app.py').write_text('from helpers import work as run\n\ndef entry():\n    return run()\n')
+        self.graph.index()
+        edge = self.graph.db.execute("""SELECT source,target FROM edges
+            WHERE kind='imported_calls_candidate'""").fetchone()
+        self.assertIsNotNone(edge)
+        self.assertTrue(edge['source'].endswith(':entry'))
+        self.assertTrue(edge['target'].endswith(':work'))
+
+    def test_test_call_is_tagged_as_a_test_to_implementation_edge(self):
+        (self.root/'helpers.py').write_text('def work():\n    return 1\n')
+        (self.root/'tests').mkdir()
+        (self.root/'tests'/'test_helpers.py').write_text(
+            'from helpers import work\n\ndef test_work():\n    assert work() == 1\n')
+        self.graph.index()
+        edge = self.graph.db.execute("""SELECT source,target FROM edges
+            WHERE kind='test_calls_candidate'""").fetchone()
+        self.assertIsNotNone(edge)
+        self.assertTrue(edge['source'].endswith(':test_work'))
+        self.assertTrue(edge['target'].endswith(':work'))
+
     def test_mcp_stdio(self):
         requests = [
             {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05'}},

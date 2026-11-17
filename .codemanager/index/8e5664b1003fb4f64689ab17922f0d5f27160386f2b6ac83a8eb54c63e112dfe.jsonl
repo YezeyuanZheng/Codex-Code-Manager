@@ -1,6 +1,0 @@
-{"table":"files","values":["codemanager/context_tool.py","f4080b0fac19926f7c3cc45d17a3db9257d391522d936ee30187475833e32ec8"]}
-{"table":"nodes","values":["codemanager/context_tool.py:1:codemanager/context_tool.py","codemanager/context_tool.py","codemanager/context_tool.py","file",1,37,"[]"]}
-{"table":"nodes","values":["codemanager/context_tool.py:1:module_1","codemanager/context_tool.py","module_1","chunk",1,37,"[]"]}
-{"table":"nodes","values":["codemanager/context_tool.py:4:context_tool","codemanager/context_tool.py","context_tool","function",4,37,"[]"]}
-{"table":"edges","values":["codemanager/context_tool.py:1:codemanager/context_tool.py","codemanager/context_tool.py:1:module_1","contains"]}
-{"table":"edges","values":["codemanager/context_tool.py:1:codemanager/context_tool.py","codemanager/context_tool.py:4:context_tool","contains"]}

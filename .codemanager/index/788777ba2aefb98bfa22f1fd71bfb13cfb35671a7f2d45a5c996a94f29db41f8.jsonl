@@ -1,8 +1,10 @@
-{"table":"files","values":["HANDOFF.md","6bb14cd05342b16bcd8781930fd23a2122f933ba440a8a9aa296f566a9b01d37"]}
-{"table":"nodes","values":["HANDOFF.md:121:chunk_121","HANDOFF.md","chunk_121","chunk",121,173,"[]"]}
+{"table":"files","values":["HANDOFF.md","a42c21ac98d975ffb8245fc548d6579705d8fba47d80510db945e84849eeaa82"]}
+{"table":"nodes","values":["HANDOFF.md:121:chunk_121","HANDOFF.md","chunk_121","chunk",121,180,"[]"]}
+{"table":"nodes","values":["HANDOFF.md:181:chunk_181","HANDOFF.md","chunk_181","chunk",181,207,"[]"]}
 {"table":"nodes","values":["HANDOFF.md:1:HANDOFF.md","HANDOFF.md","HANDOFF.md","file",1,40,"[]"]}
 {"table":"nodes","values":["HANDOFF.md:1:chunk_1","HANDOFF.md","chunk_1","chunk",1,60,"[]"]}
 {"table":"nodes","values":["HANDOFF.md:61:chunk_61","HANDOFF.md","chunk_61","chunk",61,120,"[]"]}
 {"table":"edges","values":["HANDOFF.md:1:HANDOFF.md","HANDOFF.md:121:chunk_121","contains"]}
+{"table":"edges","values":["HANDOFF.md:1:HANDOFF.md","HANDOFF.md:181:chunk_181","contains"]}
 {"table":"edges","values":["HANDOFF.md:1:HANDOFF.md","HANDOFF.md:1:chunk_1","contains"]}
 {"table":"edges","values":["HANDOFF.md:1:HANDOFF.md","HANDOFF.md:61:chunk_61","contains"]}

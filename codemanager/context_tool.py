@@ -8,7 +8,8 @@ def context_tool():
         'description': 'Preferred code retrieval: batch independent questions, exact symbols, or node IDs '
         'in one call. Searches, expands bounded one-hop context, and returns deduplicated source under '
         'one shared byte budget. Completes small functions where possible; related containers remain '
-        'pointers. Answer directly when sufficient; do not add another expansion call. '
+        'pointers. If a query names code identifiers, also pass those exact names in symbols; keep '
+        'ordinary prose in the query. Answer directly when sufficient; do not add another expansion call. '
         'The repository is already bound: omit repo. Example: {"query":"QUESTION","budget":12000}. '
         'Pass context_token from the hook or preceding response to avoid repeats. '
         'Batch follow-up symbols and use per-node offsets for continuations; graph relations are hints.',

@@ -38,6 +38,8 @@ def pack(specs, grants, metadata, budget, seen=None):
             item['truncated'] = start > 0 or stop < len(row['body'])
             item['reason'] = spec['reason']
             item['citation'] = item['path']+':'+str(item['start'])
+            if spec.get('call_sites'):
+                item['call_sites'] = spec['call_sites']
             mapping = json.loads(row['request_mapping'])
             if mapping:
                 item['request_mapping'] = mapping
@@ -115,6 +117,11 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         hints = relationships(graph, specs, min(limit*2, 20), ' '.join(queries))
         known = {spec['row']['id'] for spec in specs}
         for hint in hints:
+            if hint.get('call_sites'):
+                for spec in specs:
+                    if spec['row']['id'] == hint['id']:
+                        spec.setdefault('call_sites', []).extend(hint['call_sites'])
+        for hint in hints:
             if len(specs) >= limit:
                 break
             if hint['kind'] == 'contains' or hint['id'] in known:
@@ -123,7 +130,8 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
             if row is not None and row['kind'] in ('function', 'class'):
                 known.add(row['id'])
                 specs.append({'row': dict(row), 'reason': 'related', 'offset': 0,
-                              'length': min(6000, len(row['body']))})
+                              'length': min(6000, len(row['body'])),
+                              'call_sites': hint.get('call_sites', [])})
         # Restore search selections when relationships do not fill the reserved slots.
         for item in deferred:
             if len(specs) >= limit:

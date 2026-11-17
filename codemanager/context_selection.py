@@ -1,6 +1,25 @@
 """Resolve batched retrieval requests and bounded one-hop relationships."""
+import ast
+import textwrap
 
 
+def call_site(row, callee_name):
+    """Return compact indexed call expressions that explain an edge."""
+    leaf = callee_name.rsplit('.', 1)[-1]
+    try:
+        tree = ast.parse(textwrap.dedent(row['body']))
+    except (SyntaxError, ValueError):
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+        if name == leaf:
+            found.append({'path': row['path'], 'line': row['start']+node.lineno-1,
+                          'expression': ast.get_source_segment(textwrap.dedent(row['body']), node)})
+    return found[:3]
 def strings(value, name, maximum):
     if value is None:
         return []
@@ -18,9 +37,16 @@ def select(graph, queries, symbols, node_ids, offsets, limit, mode, model, inclu
             missing.append({'node_id': ident, 'reason': 'stale_or_unknown'})
         else:
             explicit.append((dict(row), 'requested'))
-    from .context_symbols import resolve, focus_containers
+    from .context_symbols import resolve, focus_containers, query_identifiers
     focused_containers = set()
-    for symbol in symbols:
+    resolved_symbols = list(symbols)
+    if not symbols:
+        for symbol in query_identifiers(queries, maximum=12):
+            matches, unresolved = resolve(graph, symbol, suggest=False)
+            if len(matches) == 1 and not unresolved and matches[0][0]['kind'] == 'function':
+                resolved_symbols.append(symbol)
+                break
+    for symbol in resolved_symbols:
         matches, unresolved = resolve(graph, symbol)
         focused = focus_containers(graph, matches, queries)
         kept = {row['id'] for row, _ in focused}
@@ -80,10 +106,38 @@ def relationships(graph, selected, maximum, query=""):
             hints.append({'anchor': ident,
                           'id': edge['target'] if edge['source'] == ident else edge['source'],
                           'kind': edge['kind'],
-                          'direction': 'outgoing' if edge['source'] == ident else 'incoming'})
-        for hint in callers(graph, spec['row']):
+                          'direction': 'outgoing' if edge['source'] == ident else 'incoming',
+                          **({'call_sites': call_site(spec['row'], graph.db.execute(
+                              'SELECT name FROM nodes WHERE id=?',
+                              (edge['target'],)).fetchone()['name'])}
+                             if edge['source'] == ident and edge['kind'] in
+                             ('calls_candidate', 'imported_calls_candidate') else {})})
+        indexed_calls = graph.db.execute("SELECT 1 FROM edges WHERE target=? AND kind IN "
+                                         "('calls_candidate','imported_calls_candidate','test_calls_candidate') LIMIT 1",
+                                         (ident,)).fetchone()
+        for hint in ([] if indexed_calls else callers(graph, spec['row'])):
             if not any(item['anchor']==ident and item['id']==hint['id'] for item in hints):
                 hints.append(hint)
+    # Add only a one-node bridge on a two-edge call path between selected
+    # functions. This connects relevant endpoints without broad graph crawling.
+    anchors = [spec['row'] for spec in selected if spec['row']['kind']=='function']
+    if len(anchors) > 1:
+        adjacency = {}
+        for edge in graph.db.execute("SELECT source,target,kind FROM edges WHERE kind IN ('calls_candidate','imported_calls_candidate')"):
+            adjacency.setdefault(edge['source'], []).append((edge['target'], edge['kind']))
+        selected_ids = {row['id'] for row in anchors}
+        for start in anchors:
+            for middle, first_kind in adjacency.get(start['id'], []):
+                if middle in selected_ids:
+                    continue
+                for end, _ in adjacency.get(middle, []):
+                    if end in selected_ids and end != start['id']:
+                        key = start['id'], middle, 'path_bridge'
+                        if key not in seen:
+                            seen.add(key)
+                            hints.append({'anchor': start['id'], 'id': middle,
+                                          'kind': 'path_bridge', 'direction': 'outgoing',
+                                          'path_end': end})
     from .graph import terms
     # Generic request words should not promote large, unrelated callers.
     stopwords = set('a an and are as at be by can code do does for from how i in is it '
@@ -91,6 +145,8 @@ def relationships(graph, selected, maximum, query=""):
     def tokens(text):
         return set(terms(text).lower().replace('_', ' ').split())
     words = tokens(query) - stopwords
+    flow_query = bool(set(words) & {'trace', 'through', 'flow', 'call', 'calls', 'invoke', 'execution'})
+    test_query = bool(set(words) & {'test', 'tests', 'testing'})
     def priority(hint):
         row = graph.db.execute('SELECT path,kind,name,body FROM nodes WHERE id=?', (hint['id'],)).fetchone()
         name_words = tokens(row['name']) if row else set()
@@ -100,7 +156,11 @@ def relationships(graph, selected, maximum, query=""):
         # compact evidence rather than callers mentioning many unrelated topics.
         relevance = 2 * len(words & name_words) + overlap
         density = overlap / max(1, len(body_words))
-        return (hint['kind']=='contains', is_test(row['path']) if row else True,
+        edge_kind = hint['kind']
+        flow_penalty = (edge_kind not in ('calls_candidate', 'text_call_candidate')
+                        if flow_query and hint['direction']=='outgoing' else False)
+        test_penalty = is_test(row['path']) and not test_query if row else True
+        return (hint['kind']=='contains', flow_penalty, test_penalty,
                 -relevance, -density, row['kind']!='function' if row else True)
     hints.sort(key=priority)
     return hints

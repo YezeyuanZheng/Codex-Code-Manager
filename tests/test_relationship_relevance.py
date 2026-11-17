@@ -9,6 +9,40 @@ from codemanager.graph import Graph
 
 
 class RelationshipRelevanceTests(unittest.TestCase):
+    def test_test_query_prioritizes_linked_test_for_implementation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            (path / 'helpers.py').write_text('def work():\n    return 1\n')
+            (path / 'tests').mkdir()
+            (path / 'tests' / 'test_helpers.py').write_text(
+                'from helpers import work\n\ndef test_work():\n    assert work() == 1\n')
+            graph = Graph(path)
+            self.addCleanup(graph.close)
+            graph.index()
+            rows = {row['name']: dict(row) for row in graph.db.execute(
+                "SELECT * FROM nodes WHERE kind='function'")}
+            hints = relationships(graph, [{'row': rows['work']}], 8,
+                                  'show tests for work')
+            self.assertEqual(hints[0]['id'], rows['test_work']['id'])
+            self.assertEqual(hints[0]['kind'], 'test_calls_candidate')
+
+    def test_two_edge_call_path_offers_single_bridge_node(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            (path / 'app.py').write_text(
+                'def first():\n    return middle()\n\n'
+                'def middle():\n    return last()\n\n'
+                'def last():\n    return 1\n')
+            graph = Graph(path)
+            self.addCleanup(graph.close)
+            graph.index()
+            rows = {row['name']: dict(row) for row in graph.db.execute(
+                "SELECT * FROM nodes WHERE kind='function'")}
+            hints = relationships(graph, [{'row': rows['first']}, {'row': rows['last']}],
+                                  8, 'trace first through last')
+            self.assertTrue(any(h['kind']=='path_bridge' and h['id']==rows['middle']['id']
+                                for h in hints))
+
     def test_focused_helper_precedes_broad_caller(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)

@@ -5,23 +5,17 @@ information-efficiency rubric is in [docs/retrieval-evaluation.md](docs/retrieva
 
 ## Prioritized next tasks
 
-1. Freeze retrieval regression cases for the setup/call capture wrappers,
-   `call_fixture_func`, and `Config.parse`. Record the original questions,
-   expected source ranges, repository revision, mode, and byte budget. Pass when
-   hook plus MCP exposes the relevant implementation bodies without shell reads
-   at the existing budgets. Keep separate held-out questions for evaluation.
-2. Diagnose each miss before changing ranking or budgets. Record whether the
-   expected unit was absent from candidates, ranked below selection, or clipped
-   during packing. Pass when every known miss has a reproducible classification;
-   candidate graph edges alone do not establish source coverage.
-3. Attribute repeated exposure to within-response overlap, cross-call MCP
-   repetition, and shell rereads. Report emitted source ranges separately from
-   metadata. Pass when these categories reconcile with the aggregate metric.
-4. Preserve a durable evaluation bundle outside temporary directories. Include
+1. Run fresh, matched Codex sessions on the current code after query-identifier
+   promotion. The current frozen replay is retrieval-only and reuses historical
+   MCP arguments; it does not measure agent behavior or shell fallback.
+2. Improve BM25 coverage for `src/_pytest/config/__init__.py:1685:Config.parse`.
+   In the latest current-code replay it is the sole BM25 miss; controlled hybrid
+   retrieval includes it. Record candidate rank and budget effects before tuning.
+3. Preserve a durable evaluation bundle outside temporary directories. Include
    runner/analyzer code, frozen cases, dependency versions, source/tool revisions,
    configuration, raw traces, and checksums. Pass when a fresh checkout can
    reproduce the analysis without the original workspace or `/tmp` package.
-5. Repeat comparisons across repositories and runs. Report setup/indexing,
+4. Repeat comparisons across repositories and runs. Report setup/indexing,
    embedding generation, cold queries, warm queries, and full-session costs
    separately, including variability and transport failures. Do not change the
    default mode based only on the current four-question comparison.
@@ -49,8 +43,16 @@ changes, run:
   distinguishes implementation-plus-tests from test-only questions, suggests
   current names for missing symbols, and focuses large requested classes on
   matching members. Explicit `limit` values remain hard maxima.
+- If a query contains code-shaped identifiers but no explicit `symbols` list,
+  selection promotes the first identifier that resolves to one function. It
+  skips ambiguous names and fuzzy suggestions. Supplying `symbols` disables this
+  fallback so an explicit symbol set is not crowded by extra query identifiers.
+  The MCP tool description asks callers to pass exact query identifiers through
+  `symbols` as well as keeping natural language in `query`.
 - Indexed AST-checked call-name candidates supplement graph edges for attribute
   calls. These are hints, not resolved receiver types or proven call paths.
+- Calls resolved from test files use `test_calls_candidate` edges; test-focused
+  queries prioritize these linked tests without broad test-name matching.
 - Responses of at least 1,000 bytes include an explicit `context_token`. Pass it
   into follow-ups to skip previously emitted source. Receipts are immutable,
   retain the newest 128 entries, and validate each file's indexed digest. Changed
@@ -81,7 +83,32 @@ Local `.codex/` hook configuration is intentionally untracked. Hook installation
 for other clones is documented in README; do not accidentally commit this local
 configuration with implementation changes.
 
-## Latest actual Codex comparison
+## Latest frozen pytest replay with current code
+
+The replay uses the real pytest source at commit
+`36eed6b7b0eb59760fc4b33e90bdaac5057388f0` and the current working-tree
+CodeManager package. It replays the recorded hook question and historical MCP
+arguments; it is not a new Codex session and does not count shell output.
+
+| Mode | Exact | Discovery | Trace | Edge | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Hybrid | 4/4 | 5/5 | 4/4 | 4/4 | **17/17** |
+| BM25 | 4/4 | 5/5 | 4/4 | **3/4** | **16/17** |
+
+Hybrid now retrieves `call_fixture_func` from the code-shaped identifier in the
+trace query, even when the caller omitted `symbols`. BM25's remaining miss is
+`Config.parse`. Hybrid output was 96,871 bytes across the replay, 746 bytes more
+than before identifier promotion. BM25 output remained 86,227 bytes. The
+identifier fallback runs only when no explicit symbols were supplied; broad
+promotion regressed BM25 discovery and was discarded.
+
+Reproduce with:
+
+```bash
+.venv/bin/python .codemanager/retrieval-replay-d140969/replay.py updated
+```
+
+## Earlier actual Codex comparison (before query-symbol promotion)
 
 Used the real pytest repository at commit
 `36eed6b7b0eb59760fc4b33e90bdaac5057388f0`: 274 Python files, 117,613 lines.
@@ -106,10 +133,13 @@ Hybrid used 10.5% fewer calls, 12.2% less output, and 15.0% fewer cumulative inp
 tokens than default, but took 6.7% longer. BM25 and hybrid were essentially tied
 on elapsed time. Do not claim a universal speed improvement from this small set.
 
-All arms eventually retrieved 17/17 required implementation units and passed
-16/16 factual checks per arm. Hook plus MCP alone covered **14/17 for hybrid**
-and **16/17 for BM25**; shell reads supplied remaining evidence. Every scored MCP
-call used the context token, with no mode contamination or failed retrieval calls.
+In those earlier actual sessions, all arms eventually retrieved 17/17 required
+implementation units and passed 16/16 factual checks per arm. Hook plus MCP
+alone covered **14/17 for hybrid** and **16/17 for BM25**; shell reads supplied
+remaining evidence. These figures predate the latest query-symbol change and
+must not be compared as if they were fresh sessions on current code. Every
+scored MCP call used the context token, with no mode contamination or failed
+retrieval calls.
 
 Source-information audit, using unique source characters:
 
@@ -150,6 +180,9 @@ workspace, but will not accompany a new clone:
 - `cases.json`, `metrics.json` — frozen questions, references, rubric.
 - `measurements.json`, `information.json`, `structured-recall.json` — source
   mapping, important/extra/repeated information, and CodeManager-only coverage.
+- `.codemanager/retrieval-replay-d140969/updated.json` — current-code frozen
+  replay coverage, response bytes, and latency; `updated-before-query-symbols.json`
+  is the per-change comparison point.
 - `extra-source-pool.json`, `extra-source-audit.json`, `quality.json` — audits.
 - `*.events.jsonl`, `*.timeline.json`, `*.answer.txt`, `*.hook.json` — raw traces.
 - `protocol-amendments.json`, `transport-affected/`, `invalid-*` — exclusions and
@@ -158,16 +191,17 @@ workspace, but will not accompany a new clone:
   `/tmp/codemanager-eval-v4-122o8yeq`; temporary directories may be cleaned later.
 - Earlier comparisons remain under `.codemanager/retrieval-eval-v2/` and `-v3/`.
 
-Remaining work: improve core-evidence coverage and avoid shell rereads; do not
-increase byte budgets blindly. Hybrid still missed the two setup/call capture
-wrappers and `call_fixture_func` in hook/MCP evidence. BM25 missed `Config.parse`.
-Correct final answers must not conceal those retrieval gaps. Larger repeated and
-independent-repository evaluations are needed for reliable speed conclusions.
+Remaining work: run fresh Codex sessions on current code, investigate the BM25
+`Config.parse` candidate miss, and avoid shell rereads. Do not increase byte
+budgets blindly. The latest replay has full hybrid coverage and one BM25 miss,
+but the current-code result still needs fresh-session confirmation. Larger
+repeated and independent-repository evaluations are needed for reliable speed
+conclusions.
 
 If reusing the analyzer, include hook observations for both `hybrid` and `bm25`
 arm names; an old `arm == 'codemanager'` condition silently omitted hook evidence.
 The final v4 measurements corrected this and include hook bytes and source.
 
-Validation at handoff: 145 unit tests passed, one optional real-model test skipped;
+Validation at handoff: 156 unit tests passed, one optional real-model test skipped;
 portable graph and file-length checks passed. Optional independent review is
 currently disabled. Follow AGENTS.md for graph refresh, staged checks, and commits.

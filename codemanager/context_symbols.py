@@ -1,8 +1,29 @@
 """Bounded symbol resolution and suggestions from the current index."""
 import difflib
+import re
 
 
-def resolve(graph, symbol):
+_QUERY_IDENTIFIER = re.compile(r'(?<![\w])(?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?![\w])')
+
+
+def query_identifiers(queries, maximum=12):
+    """Extract code-shaped names while leaving ordinary query words lexical."""
+    found = []
+    seen = set()
+    for query in queries:
+        for match in _QUERY_IDENTIFIER.finditer(query):
+            name = match.group()
+            code_shaped = ('_' in name or '.' in name or
+                           re.search(r'[a-z][A-Z]', name) is not None)
+            if code_shaped and name not in seen:
+                found.append(name)
+                seen.add(name)
+                if len(found) >= maximum:
+                    return found
+    return found
+
+
+def resolve(graph, symbol, *, suggest=True):
     path, name = symbol.rsplit(':', 1) if ':' in symbol else (None, symbol)
     suffix = '.'+name
     rows = graph.db.execute('''SELECT * FROM nodes WHERE kind IN ('function','class')
@@ -21,6 +42,8 @@ def resolve(graph, symbol):
     if rows:
         return [(dict(row), 'symbol') for row in rows[:4]], ([] if len(rows)<5 else
                 [{'symbol':symbol,'reason':'ambiguous_more_matches','hint':'Qualify with path.py:symbol'}])
+    if not suggest:
+        return [], []
     leaf = name.rsplit('.',1)[-1].lstrip('_').lower()
     parent = name.rsplit('.',1)[0] if '.' in name else None
     # Restrict suggestions by container or file rather than scanning the entire repository.

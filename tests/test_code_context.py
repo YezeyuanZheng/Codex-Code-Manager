@@ -232,3 +232,41 @@ class CodeContextTests(unittest.TestCase):
             value = json.loads(line)['result']
             self.assertTrue(value['isError'])
             self.assertIn('use get_context',value['content'][0]['text'])
+
+    def test_flow_query_includes_direct_called_helper(self):
+        self.source.write_text('def fixture_flow(value):\n    return call_fixture_func(value)\n\n'
+                               'def call_fixture_func(value):\n    return value\n\n'
+                               'def unrelated():\n    return 0\n')
+        self.graph.index()
+        result = self.graph.get_context(query='Trace fixture_flow through call_fixture_func',
+                                        mode='bm25', budget=6000, limit=4)
+        names = {item['name'] for item in result['results']}
+        self.assertIn('fixture_flow', names)
+        self.assertIn('call_fixture_func', names)
+        self.assertNotIn('unrelated', names)
+        helper = next(item for item in result['results'] if item['name']=='call_fixture_func')
+        self.assertTrue(any(site['expression']=='call_fixture_func(value)'
+                            for site in helper.get('call_sites', [])))
+        self.assert_disjoint(result)
+
+    def test_query_promotes_unique_code_identifier_without_search_hit(self):
+        from codemanager.context_symbols import query_identifiers
+        self.source.write_text('def call_fixture_func(value):\n    return value\n')
+        self.graph.index()
+        self.assertEqual(query_identifiers(
+            ['Trace call_fixture_func through fixture teardown']), ['call_fixture_func'])
+        with patch.object(self.graph, '_search_candidates', return_value=([], None, 'bm25')):
+            result = self.graph.get_context(query='Trace call_fixture_func through fixture teardown',
+                                            mode='bm25', include_related=False)
+        self.assertEqual([item['name'] for item in result['results']], ['call_fixture_func'])
+
+    def test_query_identifier_autopromotion_yields_to_explicit_symbols(self):
+        self.source.write_text(
+            'def requested(value):\n    return value\n\n'
+            'def call_fixture_func(value):\n    return value\n')
+        self.graph.index()
+        with patch.object(self.graph, '_search_candidates', return_value=([], None, 'bm25')):
+            result = self.graph.get_context(query='Inspect call_fixture_func', symbols=['requested'],
+                                            mode='bm25', include_related=False)
+        self.assertEqual([item['name'] for item in result['results']], ['requested'])
+

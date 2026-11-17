@@ -159,6 +159,15 @@ class Graph(GraphSearch):
                 self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (file_id, ident, 'contains'))
             return
 
+        imported = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                for alias in node.names:
+                    imported[alias.asname or alias.name] = (node.module, alias.name)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported[alias.asname or alias.name.split('.')[0]] = (alias.name, None)
+
         def visit(node, parent, prefix):
             for child in ast.iter_child_nodes(node):
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -170,6 +179,10 @@ class Graph(GraphSearch):
                 else:
                     if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
                         self.db.execute('INSERT INTO refs VALUES (?,?,?)', (parent, child.func.id, 'calls'))
+                        if child.func.id in imported and imported[child.func.id][1]:
+                            module, symbol = imported[child.func.id]
+                            self.db.execute('INSERT INTO refs VALUES (?,?,?)',
+                                            (parent, module+'|'+symbol, 'imported_calls'))
                     if isinstance(child, ast.Import):
                         for alias in child.names:
                             self.db.execute('INSERT INTO refs VALUES (?,?,?)', (parent, alias.name, 'imports'))
@@ -213,6 +226,8 @@ class Graph(GraphSearch):
                 module = path[:-12] if path.endswith('/__init__.py') else path[:-3]
                 module = module.replace('/', '.')
                 sources.update(row[0] for row in self.db.execute("SELECT source FROM refs WHERE kind='imports' AND name=?", (module,)))
+                sources.update(row[0] for row in self.db.execute(
+                    "SELECT source FROM refs WHERE kind='imported_calls' AND name LIKE ?", (module+'|%',)))
         resolved = 0
         for source in sorted(sources):
             row = self.db.execute('SELECT path FROM nodes WHERE id=?', (source,)).fetchone()
@@ -228,11 +243,25 @@ class Graph(GraphSearch):
     def resolve_reference(self, ref, path):
         if ref['kind'] == 'calls':
             targets = self.db.execute("SELECT id FROM nodes WHERE path=? AND name=? AND kind IN ('function','class')", (path, ref['name'])).fetchall()
+        elif ref['kind'] == 'imported_calls':
+            module, symbol = ref['name'].split('|', 1)
+            module_path = module.replace('.', '/')
+            targets = self.db.execute("SELECT id FROM nodes WHERE name=? AND kind IN ('function','class') AND path IN (?,?)",
+                                      (symbol, module_path+'.py', module_path+'/__init__.py')).fetchall()
         else:
             module = ref['name'].replace('.', '/')
             targets = self.db.execute("SELECT id FROM nodes WHERE kind='file' AND (path=? OR path=?)", (module+'.py', module+'/__init__.py')).fetchall()
         if len(targets) == 1:
-            self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (ref['source'], targets[0]['id'], ref['kind']+'_candidate'))
+            edge_kind = ref['kind']+'_candidate'
+            if ref['kind'] in ('calls', 'imported_calls'):
+                source = self.db.execute('SELECT path FROM nodes WHERE id=?',
+                                         (ref['source'],)).fetchone()
+                if source and any(part in ('test', 'tests', 'testing') or
+                                  part.startswith('test_') or part.endswith('_test.py')
+                                  for part in source['path'].split('/')):
+                    edge_kind = 'test_calls_candidate'
+            self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)',
+                            (ref['source'], targets[0]['id'], edge_kind))
 
     def index(self, *, full=False):
         from .requests import bundled_mappings, validate_mappings, restore_mappings
