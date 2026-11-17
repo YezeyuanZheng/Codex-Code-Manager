@@ -85,11 +85,22 @@ def relationships(graph, selected, maximum, query=""):
             if not any(item['anchor']==ident and item['id']==hint['id'] for item in hints):
                 hints.append(hint)
     from .graph import terms
-    words = set(terms(query).split())
+    # Generic request words should not promote large, unrelated callers.
+    stopwords = set('a an and are as at be by can code do does for from how i in is it '
+                    'of on or show that the this to what when where which with'.split())
+    def tokens(text):
+        return set(terms(text).lower().replace('_', ' ').split())
+    words = tokens(query) - stopwords
     def priority(hint):
         row = graph.db.execute('SELECT path,kind,name,body FROM nodes WHERE id=?', (hint['id'],)).fetchone()
-        overlap = len(words & set(terms(row['name']+' '+row['body']).split())) if row else 0
+        name_words = tokens(row['name']) if row else set()
+        body_words = tokens(row['body']) if row else set()
+        overlap = len(words & body_words)
+        # Name matches identify focused helpers; density breaks ties in favor of
+        # compact evidence rather than callers mentioning many unrelated topics.
+        relevance = 2 * len(words & name_words) + overlap
+        density = overlap / max(1, len(body_words))
         return (hint['kind']=='contains', is_test(row['path']) if row else True,
-                -overlap, row['kind']!='function' if row else True)
+                -relevance, -density, row['kind']!='function' if row else True)
     hints.sort(key=priority)
     return hints

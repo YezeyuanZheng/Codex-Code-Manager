@@ -1,6 +1,10 @@
 """Select disjoint source excerpts using positions in indexed node bodies."""
 from bisect import bisect_right
 import json
+import re
+
+
+_NEWLINES = re.compile("\n")
 
 
 class SourceCoverage:
@@ -11,7 +15,8 @@ class SourceCoverage:
 
     @staticmethod
     def positions(row):
-        return [0] + [index + 1 for index, char in enumerate(row['body']) if char == '\n']
+        # Regex scans in C; packing probes otherwise rescan every character in Python.
+        return [0] + [match.end() for match in _NEWLINES.finditer(row['body'])]
 
     @staticmethod
     def position(row, starts, offset):

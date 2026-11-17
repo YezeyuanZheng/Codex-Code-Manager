@@ -3,6 +3,39 @@
 Start here when continuing this work. Usage is in [README.md](README.md); the
 information-efficiency rubric is in [docs/retrieval-evaluation.md](docs/retrieval-evaluation.md).
 
+## Prioritized next tasks
+
+1. Freeze retrieval regression cases for the setup/call capture wrappers,
+   `call_fixture_func`, and `Config.parse`. Record the original questions,
+   expected source ranges, repository revision, mode, and byte budget. Pass when
+   hook plus MCP exposes the relevant implementation bodies without shell reads
+   at the existing budgets. Keep separate held-out questions for evaluation.
+2. Diagnose each miss before changing ranking or budgets. Record whether the
+   expected unit was absent from candidates, ranked below selection, or clipped
+   during packing. Pass when every known miss has a reproducible classification;
+   candidate graph edges alone do not establish source coverage.
+3. Attribute repeated exposure to within-response overlap, cross-call MCP
+   repetition, and shell rereads. Report emitted source ranges separately from
+   metadata. Pass when these categories reconcile with the aggregate metric.
+4. Preserve a durable evaluation bundle outside temporary directories. Include
+   runner/analyzer code, frozen cases, dependency versions, source/tool revisions,
+   configuration, raw traces, and checksums. Pass when a fresh checkout can
+   reproduce the analysis without the original workspace or `/tmp` package.
+5. Repeat comparisons across repositories and runs. Report setup/indexing,
+   embedding generation, cold queries, warm queries, and full-session costs
+   separately, including variability and transport failures. Do not change the
+   default mode based only on the current four-question comparison.
+
+Use `.venv/bin/python` for commands in this checkout. After implementation
+changes, run:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m codemanager export --repo .
+.venv/bin/python -m codemanager check --repo .
+.venv/bin/python -m codemanager check-length --repo .
+```
+
 ## Current implementation
 
 - `get_context` remains the only advertised MCP code-retrieval tool. Legacy MCP
