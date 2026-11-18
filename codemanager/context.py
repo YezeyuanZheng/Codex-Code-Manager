@@ -20,6 +20,11 @@ questions, exact symbols, and node IDs in one `get_context` call, or use the
 installed Python's `-m codemanager context --repo . --query "QUESTION"
 --symbol NAME --symbol OTHER` command. This already retrieves selected source and
 bounded callers, callees, imports and containers: no extra expansion is required.
+When tracing a workflow, check which requested steps have source evidence.
+For missing steps, batch one focused question per step using queries, with
+exact names for known implementations in symbols. For example, ask separately
+for the setup, call, and teardown wrappers if the result only shows their
+shared helper. Inspect the returned bodies before falling back to shell reads.
 The repository is already bound: do not pass repo or max_bytes to the MCP tool.
 Canonical MCP request: {"query":"QUESTION","budget":12000,"mode":"hybrid"}.
 Use mode="bm25" (or bm25_only=true) for keyword-only retrieval without embeddings.

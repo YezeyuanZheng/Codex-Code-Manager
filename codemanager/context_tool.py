@@ -9,7 +9,9 @@ def context_tool():
         'in one call. Searches, expands bounded one-hop context, and returns deduplicated source under '
         'one shared byte budget. Completes small functions where possible; related containers remain '
         'pointers. If a query names code identifiers, also pass those exact names in symbols; keep '
-        'ordinary prose in the query. Answer directly when sufficient; do not add another expansion call. '
+        'ordinary prose in the query. For a workflow trace with missing implementation steps, '
+        'batch one focused question per missing step in queries. Ask for the entry point or wrapper '
+        'for each step even when the shared helper is already present. Answer directly when sufficient. '
         'The repository is already bound: omit repo. Example: {"query":"QUESTION","budget":12000}. '
         'Pass context_token from the hook or preceding response to avoid repeats. '
         'Batch follow-up symbols and use per-node offsets for continuations; graph relations are hints.',
