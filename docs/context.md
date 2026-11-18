@@ -81,6 +81,12 @@ This includes source and one-hop expansion already; no extra node retrieval is
 required. Complete small definitions share one byte budget, and continuations
 accept independent per-node offsets. `get_context` is the only advertised MCP
 retrieval tool; old MCP retrieval names are rejected with a migration message.
+The hook and MCP tool default to compact output with source, file and line
+coordinates, a reuse token when available, and unresolved requests or pending
+continuations when needed. The server still uses graph relationships to select
+source. Set `compact: false` in an MCP request to inspect graph diagnostics.
+The CLI and Python library retain the detailed format by default.
+
 The lower-level CLI commands remain available for compatibility. Read focused
 source ranges for a stated gap only.
 See [node context retrieval](node-context.md). Candidate graph edges must be verified

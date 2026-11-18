@@ -8,7 +8,7 @@ from .source_coverage import SourceCoverage, add_reference, source_item
 class GraphSearch:
     def get_context(self, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
                     budget=None, limit=None, mode=None, model=None, include_related=True, budget_bytes=None,
-                    bm25_only=False, context_token=None, include_seen=False, **unknown):
+                    bm25_only=False, context_token=None, include_seen=False, compact=False, **unknown):
         from .code_context import get_context
         if unknown:
             raise ValueError('Unknown get_context parameter(s): '+', '.join(sorted(unknown))+
@@ -20,7 +20,7 @@ class GraphSearch:
             try:
                 return get_context(self, query, queries, symbols, node_ids, offsets,
                                    budget, limit, mode, model, include_related, budget_bytes,
-                                   bm25_only, context_token, include_seen)
+                                   bm25_only, context_token, include_seen, compact=compact)
             finally:
                 self._context_queries = None
                 self._prepared_query_vectors = {}

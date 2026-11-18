@@ -106,8 +106,8 @@ class ModelTests(unittest.TestCase):
         graph = Graph(self.repo, embedding_model='test/small')
         self.addCleanup(graph.close)
         requests = [
-            {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'get_context','arguments':{'query':'permit','model':'test/large'}}},
-            {'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'get_context','arguments':{'query':'permit'}}},
+            {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'get_context','arguments':{'query':'permit','model':'test/large','compact':False}}},
+            {'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'get_context','arguments':{'query':'permit','compact':False}}},
         ]
         output = io.StringIO()
         with patch('sys.stdin', io.StringIO('\n'.join(map(json.dumps, requests))+'\n')), patch('sys.stdout', output), patch('codemanager.embeddings.FastEmbedder', side_effect=self.provider):

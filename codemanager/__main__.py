@@ -90,6 +90,7 @@ def serve(graph, interval=1, mode=None, bm25_only=False):
                             args['bm25_only'] = True
                         if not args.get('bm25_only'):
                             args.setdefault('mode', mode)
+                        args.setdefault('compact', True)
                         value = graph.get_context(**args)
                     elif name == 'get_file_purpose':
                         value = get_file_purpose(graph, **args)
@@ -109,7 +110,8 @@ def serve(graph, interval=1, mode=None, bm25_only=False):
                         value = graph.stats()
                     else:
                         raise ValueError('Unknown tool or invalid arguments')
-                    result = {'content': [{'type': 'text', 'text': json.dumps(value, ensure_ascii=False)}], 'isError': False}
+                    separators = (',', ':') if name == 'get_context' and args.get('compact') else None
+                    result = {'content': [{'type': 'text', 'text': json.dumps(value, ensure_ascii=False, separators=separators)}], 'isError': False}
                 except (ValueError, TypeError, OSError, sqlite3.Error) as exc:
                     result = {'content': [{'type': 'text', 'text': str(exc)}], 'isError': True}
             else:

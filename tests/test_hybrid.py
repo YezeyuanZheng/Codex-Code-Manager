@@ -156,7 +156,7 @@ class HybridTests(unittest.TestCase):
             serve(self.graph, mode='hybrid')
         response = json.loads(output.getvalue())['result']
         self.assertFalse(response['isError'])
-        self.assertEqual(json.loads(response['content'][0]['text'])['results'][0]['name'], 'permit')
+        self.assertIn('def permit(', json.loads(response['content'][0]['text'])['results'][0]['body'])
 
     def test_local_adapter_calls_query_and_passage_methods(self):
         model = SimpleNamespace(passage_embed=lambda texts, **kwargs: [[3,4] for _ in texts], query_embed=lambda text: iter([[3,4]]))

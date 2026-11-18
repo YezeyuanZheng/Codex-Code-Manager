@@ -63,9 +63,22 @@ def pack(specs, grants, metadata, budget, seen=None):
     return output
 
 
+def compact_response(output):
+    """Keep citation coordinates and actionable continuations in model-facing results."""
+    result = {key: output[key] for key in
+              ('mode', 'truncated', 'context_token', 'unresolved', 'pending') if key in output}
+    result['results'] = [
+        {key: item[key] for key in ('path', 'start', 'end', 'body')}
+        for item in output['results']
+    ]
+    return result
+
+
 def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
                 budget=None, limit=None, mode=None, model=None, include_related=True, budget_bytes=None,
-                bm25_only=False, context_token=None, include_seen=False):
+                bm25_only=False, context_token=None, include_seen=False, compact=False):
+    if type(compact) is not bool:
+        raise ValueError('compact must be boolean')
     if budget_bytes is not None:
         if type(budget_bytes) is not int:
             raise ValueError('budget_bytes must be an integer alias for budget')
@@ -198,4 +211,4 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         output['truncated'] = True
     if receipt:
         context_receipts.save(graph, receipt, previous, output)
-    return output
+    return compact_response(output) if compact else output

@@ -200,7 +200,7 @@ class CodeContextTests(unittest.TestCase):
             capture_output=True,text=True,check=True)
         self.assertEqual(json.loads(cli.stdout)['budget'],3000)
         request = {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'get_context',
-            'arguments':{'symbols':['validate'],'budget_bytes':3000,'include_related':False}}}
+            'arguments':{'symbols':['validate'],'budget_bytes':3000,'include_related':False,'compact':False}}}
         result = subprocess.run([sys.executable,'-m','codemanager','serve','--repo',str(self.repo)],
             input=json.dumps(request)+'\n',capture_output=True,text=True,check=True)
         value = json.loads(result.stdout)['result']
@@ -219,8 +219,11 @@ class CodeContextTests(unittest.TestCase):
             capture_output=True,text=True,check=True,env=env)
         value = json.loads(mcp.stdout)['result']
         self.assertFalse(value['isError'])
-        self.assertEqual({item['name'] for item in json.loads(value['content'][0]['text'])['results']},
-                         {'validate','persist'})
+        result = json.loads(value['content'][0]['text'])
+        self.assertEqual({item['body'].split('(')[0].strip() for item in result['results']},
+                         {'def validate', 'def persist'})
+        self.assertTrue(all(set(item) == {'path', 'start', 'end', 'body'}
+                            for item in result['results']))
 
     def test_removed_mcp_tools_are_rejected_with_the_replacement_name(self):
         requests = [{'jsonrpc':'2.0','id':number,'method':'tools/call',

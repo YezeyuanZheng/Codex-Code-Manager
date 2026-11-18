@@ -123,14 +123,23 @@ def relationships(graph, selected, maximum, query=""):
     anchors = [spec['row'] for spec in selected if spec['row']['kind']=='function']
     if len(anchors) > 1:
         adjacency = {}
-        for edge in graph.db.execute("SELECT source,target,kind FROM edges WHERE kind IN ('calls_candidate','imported_calls_candidate')"):
-            adjacency.setdefault(edge['source'], []).append((edge['target'], edge['kind']))
+
+        def outgoing(source):
+            if source not in adjacency:
+                adjacency[source] = [
+                    edge['target'] for edge in graph.db.execute(
+                        "SELECT target FROM edges WHERE source=? AND kind IN "
+                        "('calls_candidate','imported_calls_candidate') ORDER BY rowid",
+                        (source,))
+                ]
+            return adjacency[source]
+
         selected_ids = {row['id'] for row in anchors}
         for start in anchors:
-            for middle, first_kind in adjacency.get(start['id'], []):
+            for middle in outgoing(start['id']):
                 if middle in selected_ids:
                     continue
-                for end, _ in adjacency.get(middle, []):
+                for end in outgoing(middle):
                     if end in selected_ids and end != start['id']:
                         key = start['id'], middle, 'path_bridge'
                         if key not in seen:
@@ -147,10 +156,16 @@ def relationships(graph, selected, maximum, query=""):
     words = tokens(query) - stopwords
     flow_query = bool(set(words) & {'trace', 'through', 'flow', 'call', 'calls', 'invoke', 'execution'})
     test_query = bool(set(words) & {'test', 'tests', 'testing'})
+    ranked_nodes = {}
+    for ident in dict.fromkeys(hint['id'] for hint in hints):
+        row = graph.db.execute('SELECT path,kind,name,body FROM nodes WHERE id=?', (ident,)).fetchone()
+        if row:
+            ranked_nodes[ident] = (row, tokens(row['name']), tokens(row['body']))
+
     def priority(hint):
-        row = graph.db.execute('SELECT path,kind,name,body FROM nodes WHERE id=?', (hint['id'],)).fetchone()
-        name_words = tokens(row['name']) if row else set()
-        body_words = tokens(row['body']) if row else set()
+        row, name_words, body_words = ranked_nodes.get(hint['id'], (None, (), ()))
+        if row is None:
+            name_words = body_words = set()
         overlap = len(words & body_words)
         # Name matches identify focused helpers; density breaks ties in favor of
         # compact evidence rather than callers mentioning many unrelated topics.

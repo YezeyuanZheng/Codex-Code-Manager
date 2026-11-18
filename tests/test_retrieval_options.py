@@ -69,7 +69,7 @@ class RetrievalOptionsTests(unittest.TestCase):
             self.assertEqual(self.graph.get_context(query='first')['mode'], 'bm25')
             with patch.dict(os.environ, {'CODEMANAGER_TIMING':'0'}):
                 hook = prompt_hook(self.root, {'prompt':'first'})
-            self.assertIn('"mode": "bm25"', hook['hookSpecificOutput']['additionalContext'])
+            self.assertIn('"mode":"bm25"', hook['hookSpecificOutput']['additionalContext'])
         with patch.dict(os.environ, {'CODEMANAGER_SEARCH_MODE':'hybrid'}):
             self.assertEqual(selected_mode(self.root), 'hybrid')
             self.assertEqual(selected_mode(self.root, 'bm25'), 'bm25')
