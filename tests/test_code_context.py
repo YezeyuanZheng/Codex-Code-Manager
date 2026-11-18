@@ -130,6 +130,21 @@ class CodeContextTests(unittest.TestCase):
             self.assertEqual(item['offset'], cursors[item['id']])
         self.assert_disjoint(followup)
 
+    def test_compact_pending_can_be_sent_back_and_preserves_complete_lines(self):
+        source = 'def long_method():\n' + ''.join(
+            f'    value_{index} = {index}\n' for index in range(100)
+        ) + '    return value_99\n'
+        self.source.write_text(source)
+        self.graph.index()
+        initial = self.graph.get_context(symbols=['long_method'], budget=1000, compact=True,
+                                         include_related=False)
+        prefix = initial['results'][0]['body']
+        self.assertTrue(prefix.endswith('\n') or source[len(prefix)] == '\n')
+        followup = self.graph.get_context(pending=initial['pending'], context_token=initial['context_token'],
+                                          compact=True, include_related=False)
+        self.assertEqual(followup['mode'], 'lookup')
+        self.assertEqual(prefix + followup['results'][0]['body'], source.rstrip('\n'))
+
     def test_missing_nodes_and_ambiguous_symbols_do_not_discard_other_results(self):
         (self.repo/'other.py').write_text('def validate(value):\n    return bool(value)\n')
         self.graph.index()
@@ -190,7 +205,8 @@ class CodeContextTests(unittest.TestCase):
         matching.pop('context_token')
         self.assertEqual(matching, canonical)
         for options in ({'budget':3000,'budget_bytes':4000}, {'budget_bytes':True},
-                        {'budget_bytes':255}, {'budget':True,'budget_bytes':3000}):
+                        {'budget_bytes':255}, {'budget':True,'budget_bytes':3000},
+                        {'max_bytes':True}, {'budget_bytes':3000,'max_bytes':4000}):
             with self.subTest(options=options), self.assertRaises(ValueError):
                 self.graph.get_context(symbols=['validate'], **options)
 
@@ -201,11 +217,15 @@ class CodeContextTests(unittest.TestCase):
         self.assertEqual(json.loads(cli.stdout)['budget'],3000)
         request = {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'get_context',
             'arguments':{'symbols':['validate'],'budget_bytes':3000,'include_related':False,'compact':False}}}
-        result = subprocess.run([sys.executable,'-m','codemanager','serve','--repo',str(self.repo)],
-            input=json.dumps(request)+'\n',capture_output=True,text=True,check=True)
-        value = json.loads(result.stdout)['result']
-        self.assertFalse(value['isError'])
-        self.assertEqual(json.loads(value['content'][0]['text'])['budget'],3000)
+        for alias in ('budget_bytes', 'max_bytes'):
+            with self.subTest(alias=alias):
+                request['params']['arguments'] = {
+                    'symbols':['validate'], alias:3000, 'include_related':False, 'compact':False}
+                result = subprocess.run([sys.executable,'-m','codemanager','serve','--repo',str(self.repo)],
+                    input=json.dumps(request)+'\n',capture_output=True,text=True,check=True)
+                value = json.loads(result.stdout)['result']
+                self.assertFalse(value['isError'])
+                self.assertEqual(json.loads(value['content'][0]['text'])['budget'],3000)
 
     def test_cli_and_mcp_each_return_a_symbol_batch_in_one_invocation(self):
         env = {**os.environ,'CODEMANAGER_SEARCH_MODE':'bm25'}

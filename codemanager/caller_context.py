@@ -2,6 +2,24 @@
 import ast
 import re
 import textwrap
+from functools import lru_cache
+
+
+@lru_cache(maxsize=256)
+def called_names(body):
+    # Key by source so edits cannot reuse the previous call names.
+    try:
+        tree = ast.parse(textwrap.dedent(body))
+    except SyntaxError:
+        return frozenset()
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+            elif isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+    return frozenset(names)
 
 
 def callers(graph, row, maximum=4):
@@ -18,17 +36,7 @@ def callers(graph, row, maximum=4):
     rows = graph.db.execute('''SELECT nodes.* FROM search JOIN nodes ON search.id=nodes.id
         WHERE search MATCH ? AND nodes.kind='function' AND nodes.id!=?
         ORDER BY rank,nodes.id LIMIT 40''', (match, row['id'])).fetchall()
-    found = []
-    for candidate in rows:
-        try:
-            tree = ast.parse(textwrap.dedent(candidate['body']))
-        except SyntaxError:
-            continue
-        if any(isinstance(node, ast.Call) and
-               (isinstance(node.func, ast.Attribute) and node.func.attr == name or
-                isinstance(node.func, ast.Name) and node.func.id == name)
-               for node in ast.walk(tree)):
-            found.append(dict(candidate))
+    found = [dict(candidate) for candidate in rows if name in called_names(candidate['body'])]
     found.sort(key=lambda item: (is_test(item['path']), len(item['body']), item['id']))
     return [{'anchor': row['id'], 'id': item['id'], 'kind': 'text_call_candidate',
              'direction': 'incoming'} for item in found[:maximum]]

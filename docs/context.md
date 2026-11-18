@@ -79,7 +79,10 @@ relationships, and stop retrieving if sufficient. For gaps, batch questions,
 exact symbols, and node IDs in one `get_context` call or `context --repo .` command.
 This includes source and one-hop expansion already; no extra node retrieval is
 required. Complete small definitions share one byte budget, and continuations
-accept independent per-node offsets. `get_context` is the only advertised MCP
+accept independent per-node offsets. For an MCP follow-up, send the latest
+`context_token` and copy the needed `{id, offset}` entries into `pending`.
+For a method cut off inside its class, request the qualified method in `symbols`.
+`get_context` is the only advertised MCP
 retrieval tool; old MCP retrieval names are rejected with a migration message.
 The hook and MCP tool default to compact output with source, file and line
 coordinates, a reuse token when available, and unresolved requests or pending

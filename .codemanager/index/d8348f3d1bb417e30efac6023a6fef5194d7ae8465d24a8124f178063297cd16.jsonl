@@ -36,7 +36,7 @@
 {"table":"edges","values":["tests/test_retrieval_options.py:1:tests/test_retrieval_options.py","codemanager/retrieval_settings.py:1:codemanager/retrieval_settings.py","imports_candidate"]}
 {"table":"edges","values":["tests/test_retrieval_options.py:1:tests/test_retrieval_options.py","tests/test_retrieval_options.py:18:RetrievalOptionsTests","contains"]}
 {"table":"edges","values":["tests/test_retrieval_options.py:1:tests/test_retrieval_options.py","tests/test_retrieval_options.py:1:module_1","contains"]}
-{"table":"edges","values":["tests/test_retrieval_options.py:65:RetrievalOptionsTests.test_saved_bm25_mode_and_hook_never_initialize_a_model","codemanager/context.py:31:prompt_hook","test_calls_candidate"]}
+{"table":"edges","values":["tests/test_retrieval_options.py:65:RetrievalOptionsTests.test_saved_bm25_mode_and_hook_never_initialize_a_model","codemanager/context.py:33:prompt_hook","test_calls_candidate"]}
 {"table":"edges","values":["tests/test_retrieval_options.py:65:RetrievalOptionsTests.test_saved_bm25_mode_and_hook_never_initialize_a_model","codemanager/retrieval_settings.py:11:selected_mode","test_calls_candidate"]}
 {"table":"edges","values":["tests/test_retrieval_options.py:65:RetrievalOptionsTests.test_saved_bm25_mode_and_hook_never_initialize_a_model","codemanager/retrieval_settings.py:24:configure","test_calls_candidate"]}
 {"table":"edges","values":["tests/test_retrieval_options.py:81:RetrievalOptionsTests.test_unknown_parameters_give_actionable_canonical_example","codemanager/__main__.py:53:serve","test_calls_candidate"]}

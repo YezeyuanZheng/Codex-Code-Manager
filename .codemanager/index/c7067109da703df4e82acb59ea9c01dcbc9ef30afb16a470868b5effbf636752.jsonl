@@ -1,8 +1,8 @@
-{"table":"files","values":["codemanager/vector_search.py","926777bd4311749b7d6acea5a4c4d245b281a1dac62859c100fc03a91ced5309"]}
+{"table":"files","values":["codemanager/vector_search.py","8029d31928221140e2df53f50e9f954e0c2216ab4db725b453bbb36888d1ecb6"]}
 {"table":"nodes","values":["codemanager/vector_search.py:1:codemanager/vector_search.py","codemanager/vector_search.py","codemanager/vector_search.py","file",1,40,"[]"]}
 {"table":"nodes","values":["codemanager/vector_search.py:1:module_1","codemanager/vector_search.py","module_1","chunk",1,60,"[]"]}
 {"table":"nodes","values":["codemanager/vector_search.py:5:stamp","codemanager/vector_search.py","stamp","function",5,6,"[]"]}
-{"table":"nodes","values":["codemanager/vector_search.py:9:search","codemanager/vector_search.py","search","function",9,60,"[]"]}
+{"table":"nodes","values":["codemanager/vector_search.py:9:search","codemanager/vector_search.py","search","function",9,64,"[]"]}
 {"table":"edges","values":["codemanager/vector_search.py:1:codemanager/vector_search.py","codemanager/vector_search.py:1:module_1","contains"]}
 {"table":"edges","values":["codemanager/vector_search.py:1:codemanager/vector_search.py","codemanager/vector_search.py:5:stamp","contains"]}
 {"table":"edges","values":["codemanager/vector_search.py:1:codemanager/vector_search.py","codemanager/vector_search.py:9:search","contains"]}
@@ -13,7 +13,6 @@
 {"table":"refs","values":["codemanager/vector_search.py:9:search","EmbeddingError","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","EmbeddingError","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","EmbeddingError","calls"]}
-{"table":"refs","values":["codemanager/vector_search.py:9:search","any","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","batch","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","embeddings","imports"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","float","calls"]}
@@ -42,6 +41,7 @@
 {"table":"refs","values":["codemanager/vector_search.py:9:search","stamp","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","stamp","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","sync_embeddings","calls"]}
+{"table":"refs","values":["codemanager/vector_search.py:9:search","unpack","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","unpack","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","zip","calls"]}
 {"table":"refs","values":["codemanager/vector_search.py:9:search","zip","calls"]}

@@ -33,6 +33,12 @@ def pack(specs, grants, metadata, budget, seen=None):
         if not pieces:
             continue
         for start, stop in pieces:
+            # Keep citations and continuations on line boundaries when a full line fits.
+            body = row['body']
+            if stop < len(body) and body[stop - 1] != '\n' and body[stop] != '\n':
+                newline = body.rfind('\n', start, stop)
+                if newline > start:
+                    stop = newline + 1
             item = {key: row[key] for key in ('id', 'path', 'name')}
             item.update(source_item(row, start, stop))
             item['truncated'] = start > 0 or stop < len(row['body'])
@@ -74,17 +80,36 @@ def compact_response(output):
     return result
 
 
+def pending_offsets(pending):
+    if not isinstance(pending, list) or not 1 <= len(pending) <= 20:
+        raise ValueError('pending must contain 1 to 20 continuation entries')
+    offsets = {}
+    for entry in pending:
+        if (not isinstance(entry, dict) or set(entry) != {'id', 'offset'}
+                or not isinstance(entry['id'], str) or not entry['id'].strip()
+                or type(entry['offset']) is not int or entry['offset'] < 0):
+            raise ValueError('Each pending entry must have a node id and a nonnegative character offset')
+        ident, offset = entry['id'], entry['offset']
+        if ident in offsets and offsets[ident] != offset:
+            raise ValueError('pending must use one offset per node')
+        offsets[ident] = offset
+    return offsets
+
+
 def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
                 budget=None, limit=None, mode=None, model=None, include_related=True, budget_bytes=None,
-                bm25_only=False, context_token=None, include_seen=False, compact=False):
+                bm25_only=False, context_token=None, include_seen=False, compact=False, pending=None,
+                max_bytes=None):
     if type(compact) is not bool:
         raise ValueError('compact must be boolean')
-    if budget_bytes is not None:
-        if type(budget_bytes) is not int:
-            raise ValueError('budget_bytes must be an integer alias for budget')
-        if budget is not None and (type(budget) is not int or budget != budget_bytes):
-            raise ValueError('budget and budget_bytes must match when both are supplied')
-        budget = budget_bytes
+    for name, value in (('budget_bytes', budget_bytes), ('max_bytes', max_bytes)):
+        if value is None:
+            continue
+        if type(value) is not int:
+            raise ValueError(f'{name} must be an integer alias for budget')
+        if budget is not None and (type(budget) is not int or budget != value):
+            raise ValueError(f'budget and {name} must match when both are supplied')
+        budget = value
     budget = 12000 if budget is None else budget
     queries = strings(queries, 'queries', 8)
     symbols = strings(symbols, 'symbols', 20)
@@ -93,8 +118,18 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         if not isinstance(query, str) or not query.strip():
             raise ValueError('query must be nonempty text')
         queries = strings([query]+queries, 'queries', 8)
+    offsets = {} if offsets is None else offsets
+    if (not isinstance(offsets, dict) or any(key not in node_ids or type(value) is not int or value < 0
+                                           for key, value in offsets.items())):
+        raise ValueError('offsets must map requested node_ids to nonnegative character offsets')
+    if pending is not None:
+        continuations = pending_offsets(pending)
+        if any(key in offsets and offsets[key] != value for key, value in continuations.items()):
+            raise ValueError('pending and offsets must agree for the same node')
+        offsets = {**offsets, **continuations}
+        node_ids = strings(list(dict.fromkeys([*continuations, *node_ids])), 'node_ids', 20)
     if not queries and not symbols and not node_ids:
-        raise ValueError('Provide query, queries, symbols, or node_ids')
+        raise ValueError('Provide query, queries, symbols, node_ids, or pending')
     if limit is None:
         limit = min(50, max(8, budget//1500 if type(budget) is int else 8,
                             len(node_ids)+len(symbols)+min(2,len(queries))))
@@ -110,10 +145,6 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         raise ValueError('include_related must be boolean')
     if mode not in (None, 'hybrid', 'bm25', 'semantic'):
         raise ValueError('mode must be hybrid, bm25, or semantic')
-    offsets = {} if offsets is None else offsets
-    if (not isinstance(offsets, dict) or any(key not in node_ids or type(value) is not int or value < 0
-                                           for key, value in offsets.items())):
-        raise ValueError('offsets must map requested node_ids to nonnegative character offsets')
     from . import context_receipts
     previous = context_receipts.load(graph, context_token)
     seen = {} if include_seen else previous
