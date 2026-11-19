@@ -1,5 +1,6 @@
 """Reusable decoded vectors and batched queries, invalidated by SQLite changes."""
 import math
+from heapq import nsmallest
 
 
 def stamp(graph):
@@ -61,4 +62,4 @@ def search(graph, embedder, query, limit):
         if score > 0 and (node_id not in best or score > best[node_id][0]):
             best[node_id] = float(score), chunk
     return [(ident, score, chunk) for ident, (score, chunk) in
-            sorted(best.items(), key=lambda item: (-item[1][0], item[0]))[:limit]]
+            nsmallest(limit, best.items(), key=lambda item: (-item[1][0], item[0]))]

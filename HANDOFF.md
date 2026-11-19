@@ -1,71 +1,85 @@
-# Retrieval work handoff — 2026-11-18
+# Retrieval work handoff — 2026-11-19
 
-The goal is complete source coverage with as little model-facing context and
-retrieval time as possible. Shell remains a fallback for CodeManager and the
-primary retrieval mechanism for the default Codex baseline.
+The goal is complete source coverage with less model-facing context and lower
+retrieval and session latency. The prompt hook uses hybrid retrieval by default.
 
 ## Current implementation
 
-- On top of `c5e470b` (focused workflow follow-up guidance), the prompt hook
-  and MCP `get_context` default to compact output. It keeps source, path and
-  line coordinates, the reuse token, and actionable pending or unresolved
-  items. Graph relationships still inform selection. MCP callers can request
-  `compact: false` for diagnostics. The CLI and library retain detailed defaults.
-- The compact format and shorter hook instructions reduced the saved hybrid
-  sessions' same-source payload from 169.0 kB to 118.3 kB (30%). This was
-  offline reformatting of saved responses. Live coverage and token usage
-  remain to be measured.
-- Graph expansion follows indexed outgoing edges from selected functions and
-  their neighbors to find two-edge bridges. It reuses ranking inputs for nodes
-  with multiple hints. On 24 matched pytest samples median relationship
-  expansion was 13.06 ms before and 11.47 ms after, with identical outputs.
-  This is a graph-stage timing, separate from end-to-end retrieval.
-- Strict BM25 uses `serve --bm25-only`. BM25 with override is a separate arm.
-  Exact lookups report `lookup` and are valid in either strict arm. Audit
-  effective modes and count failed calls separately.
+- The prompt hook and MCP `get_context` return compact source spans, context
+  tokens, and actionable pending entries. CLI and library output remains detailed
+  by default. Use `compact: false` for MCP graph diagnostics.
+- A follow-up can send the needed `pending` entries with the latest
+  `context_token`. Packing preserves line boundaries when a complete line fits.
+  For a method cut off inside its class, request its qualified name in `symbols`.
+- Use `budget` for byte limits. MCP also accepts `max_bytes` and `budget_bytes`.
+  A trace showed that an unsupported `max_bytes` caused a wasted tool round trip
+  before the alias was added.
+- Commit `6d90235` added direct NumPy loading of cached vectors, cached parsed
+  caller names, and the continuation and alias fixes. The latest work adds
+  heap-based top-K ranking and a bounded cache for source line offsets.
+  An ASCII caller prefilter was tested and dropped after an inconsistent repeat.
 
-## Latest measured baseline
+## Frozen pytest results
 
-The v2 baseline used 16 fresh Codex CLI sessions on `c5e470b`, four frozen
-questions across four arms, with pytest at
-`36eed6b7b0eb59760fc4b33e90bdaac5057388f0`.
+The four questions use pytest at `36eed6b7b0eb59760fc4b33e90bdaac5057388f0`.
+The latest live report is in the Git-ignored bundle
+`.codemanager/retrieval-eval-sol-low-GQuu16JT/`. It combines 12 original sessions
+with four refreshed strict-hybrid sessions. All used GPT-6.2 Sol at low
+reasoning. CodeManager revisions differ by arm and are recorded in `setup.json`.
 
-| Arm | Total coverage | Before shell | Payload | Extra source | Median session |
+| Arm | Coverage | Before shell | Shell calls | Cumulative input tokens | Total session time |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Default Codex | 12/13 | — | 113.7 kB | 67.3 kB | 45.4 s |
-| Strict hybrid | 13/13 | 13/13 | 169.0 kB | 66.2 kB | 66.6 s |
-| Strict BM25 | 11/13 | 10/13 | 173.2 kB | 74.7 kB | 58.3 s |
-| BM25 with hybrid override | 11/13 | 10/13 | 181.3 kB | 75.2 kB | 59.6 s |
+| Default Codex | 12/13 | — | 22 | 486,453 | 219.4 s |
+| Strict hybrid | 13/13 | 13/13 | 0 | 468,505 | 273.4 s |
+| Strict BM25 | 9/13 | 9/13 | 0 | 457,012 | 261.1 s |
+| BM25 with hybrid override | 12/13 | 11/13 | 3 | 545,827 | 286.8 s |
 
-Hybrid made zero shell calls. All CodeManager arms retrieved the four capture
-units before shell. Earlier controlled capture replay recovered 1/4 vs 4/4
-depending on the follow-up request, with equal coverage between modes for
-each fixed request. Extra source counts code outside the required AST spans,
-including potentially useful supporting code. Shell source accounting uses
-numbered lines. Payload includes hook text and tool results. Input tokens are
-cumulative and do not measure peak occupancy.
+The first Sol strict-hybrid run scored 11/13. It left
+`KeywordMatcher.from_item` and `Config.parse` incomplete. The latest rerun
+recovered both and had zero retrieval errors across 13 MCP calls, including six
+successful `max_bytes` calls. Its initial hooks took 3.81 s total, outside the
+session timer. Session traces lack per-call model and tool durations, so the
+54.0 s gap against default Codex remains unattributed.
+
+The top-K and line-offset changes have only been tested by replaying the 13
+recorded MCP requests with regenerated context tokens. Together they reduced
+median backend time from 697 to 653 ms across nine paired replays, winning every
+pair. Response payloads matched apart from context tokens, with 13/13 coverage.
+The caller prefilter was tested separately and is absent from the current code.
+
+The older `.codemanager/retrieval-eval-v2/` bundle preserves the baseline from
+`c5e470b` under the CLI's then-default model settings. Its strict-hybrid arm
+also scored 13/13. A separate account-wide snapshot moved from 89% to 91%
+during the initial 16-session Sol run. That change includes concurrent activity.
+
+## Reproduce the live benchmark
+
+Run from the CodeManager repository root. The runner writes results into its
+own directory. A new copy preserves the prior reports.
+
+```bash
+run_dir=$(mktemp -d .codemanager/retrieval-eval-next-XXXXXXXX)
+cp .codemanager/retrieval-eval-sol-low-GQuu16JT/{run.py,evidence.py,efficiency.py,rescore.py,cases.json,PROTOCOL.md} "$run_dir/"
+.venv/bin/python "$run_dir/run.py" &&
+  .venv/bin/python "$run_dir/rescore.py"
+```
+
+The frozen checkout is `/tmp/codemanager-eval-v1-20261117/frozen`. Recreate it
+at the pinned pytest revision and warm embeddings if it is missing. The
+bundles, traces, and replay scripts are local artifacts. Strict BM25 runs with
+`serve --bm25-only`. Exact lookups report `lookup` and are valid in either
+strict arm.
 
 ## Next session
 
-1. Run fresh matched CLI sessions with the compact responses and optimized
-   graph expansion. Use a new result directory to preserve the v2 baseline.
-   The runner writes into its own directory. Copy its scripts, cases, and
-   protocol before launching it with `.venv/bin/python`, then run its
-   `rescore.py` for the corrected coverage and efficiency report.
-2. Compare total coverage, extra source, repeated source, payload bytes,
-   input tokens, and shell fallback. Use pre-shell coverage only for the
-   CodeManager arms. Measure warm backend time separately from session time.
-3. If coverage holds, identify which source outside the required spans is
-   useful before changing selection. Repeat cases and repositories before
-   drawing speed conclusions or changing the default retrieval mode.
+1. Measure current code in fresh matched sessions to verify live coverage and
+   latency. Use the same model and reasoning effort across arms, and keep
+   the run and rescored output together.
+2. Timestamp model and tool events, and measure MCP handler time separately
+   from the startup hook and overall subprocess time. Compare session latency,
+   coverage, failed calls, payload bytes, repeated source, and cumulative tokens.
+3. Use recorded request replay for backend tuning. Treat shell fallback,
+   account usage, and full session times as live-session measurements.
 
-The Git-ignored `.codemanager/retrieval-eval-v2/` bundle contains `run.py`,
-`evidence.py`, `efficiency.py`, `rescore.py`, `cases.json`, `PROTOCOL.md`,
-`efficiency-report.json`, `capture-replay.json`, and the raw traces. The
-runner's frozen checkout is `/tmp/codemanager-eval-v1-20261117/frozen`.
-Recreate it at the pinned revision and warm embeddings if that path is gone.
-These artifacts are local to this workspace. Use the evaluation runner's
-ephemeral Codex CLI sessions for the measured runs.
-
-Validation before handoff: 156 unit tests ran with one skip. The portable
-graph and file-length checks passed. Follow AGENTS.md for commit checks.
+The current suite ran 157 tests with one skip. Follow AGENTS.md for exporting
+the portable graph, file-length checks, and staged commit validation.

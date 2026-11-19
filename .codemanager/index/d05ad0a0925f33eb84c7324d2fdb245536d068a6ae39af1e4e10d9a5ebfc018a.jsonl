@@ -57,7 +57,7 @@
 {"table":"edges","values":["tests/test_code_context.py:1:tests/test_code_context.py","tests/test_code_context.py:241:module_241","contains"]}
 {"table":"edges","values":["tests/test_code_context.py:275:CodeContextTests.test_query_promotes_unique_code_identifier_without_search_hit","codemanager/context_symbols.py:1:codemanager/context_symbols.py","imports_candidate"]}
 {"table":"edges","values":["tests/test_code_context.py:275:CodeContextTests.test_query_promotes_unique_code_identifier_without_search_hit","codemanager/context_symbols.py:9:query_identifiers","test_calls_candidate"]}
-{"table":"edges","values":["tests/test_code_context.py:27:CodeContextTests.assert_disjoint","codemanager/source_coverage.py:10:SourceCoverage","test_calls_candidate"]}
+{"table":"edges","values":["tests/test_code_context.py:27:CodeContextTests.assert_disjoint","codemanager/source_coverage.py:17:SourceCoverage","test_calls_candidate"]}
 {"table":"edges","values":["tests/test_code_context.py:84:CodeContextTests.test_ranking_prioritizes_implementation_and_respects_test_questions","codemanager/caller_context.py:1:codemanager/caller_context.py","imports_candidate"]}
 {"table":"edges","values":["tests/test_code_context.py:84:CodeContextTests.test_ranking_prioritizes_implementation_and_respects_test_questions","codemanager/caller_context.py:50:rank_candidates","test_calls_candidate"]}
 {"table":"refs","values":["tests/test_code_context.py:104:CodeContextTests.test_containers_stay_pointers_and_covered_nodes_keep_identity","any","calls"]}

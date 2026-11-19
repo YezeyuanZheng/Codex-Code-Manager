@@ -23,7 +23,7 @@ class SourceCoverageTests(unittest.TestCase):
     def test_positions_preserve_exact_newline_offsets(self):
         for body in ('', 'abc', '\n', 'a\n\n', 'é😀\r\n尾\n', 'a\rb\u2028c'):
             with self.subTest(body=body):
-                expected = [0] + [i + 1 for i, char in enumerate(body) if char == '\n']
+                expected = (0, *(i + 1 for i, char in enumerate(body) if char == '\n'))
                 self.assertEqual(SourceCoverage.positions({'body': body}), expected)
 
     def assert_disjoint(self, result):

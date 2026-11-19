@@ -2,9 +2,16 @@
 from bisect import bisect_right
 import json
 import re
+from functools import lru_cache
 
 
 _NEWLINES = re.compile("\n")
+
+
+@lru_cache(maxsize=256)
+def line_starts(body):
+    # Packing probes reuse the same bodies. Immutable offsets can be shared safely.
+    return (0, *(match.end() for match in _NEWLINES.finditer(body)))
 
 
 class SourceCoverage:
@@ -15,8 +22,7 @@ class SourceCoverage:
 
     @staticmethod
     def positions(row):
-        # Regex scans in C; packing probes otherwise rescan every character in Python.
-        return [0] + [match.end() for match in _NEWLINES.finditer(row['body'])]
+        return line_starts(row['body'])
 
     @staticmethod
     def position(row, starts, offset):
