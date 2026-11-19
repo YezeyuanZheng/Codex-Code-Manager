@@ -14,5 +14,6 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install .
+      - run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: python -m codemanager check --repo . --full
       - run: python -m unittest discover -s tests -v

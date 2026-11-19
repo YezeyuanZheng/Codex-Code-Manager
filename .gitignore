@@ -5,3 +5,4 @@ __pycache__/
 !.codemanager/index/
 build/
 dist/
+/HANDOFF.md

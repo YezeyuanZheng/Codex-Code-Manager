@@ -1,8 +1,5 @@
 # CodeManager
 
-Continuing the retrieval work? Read [HANDOFF.md](HANDOFF.md) for the current
-implementation, real Codex evaluation results, artifacts, and remaining gaps.
-
 A local repository index for coding agents. CodeManager combines BM25 keyword
 search with local embedding cosine similarity, then returns graph-related source
 snippets under an explicit output budget. Describe a feature or intended code
