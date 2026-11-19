@@ -58,7 +58,9 @@ def select(graph, queries, symbols, node_ids, offsets, limit, mode, model, inclu
     actual_model = None
     for query in queries:
         from .caller_context import rank_candidates
-        candidates, provider, actual_mode = graph._search_candidates(query, min(50, max(12, limit*3)), mode, model)
+        candidates, provider, actual_mode = graph._search_candidates(
+            query, min(50, max(12, limit*3)), mode, model, include_neighbors=False
+        )
         actual_model = getattr(provider, 'model_name', provider.identity) if provider is not None else None
         groups.append([(row, 'search') for row, reason in candidates
                        if reason == 'search' and row['kind'] != 'file' and row['id'] not in focused_containers])

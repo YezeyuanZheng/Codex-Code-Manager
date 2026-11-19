@@ -54,7 +54,7 @@ class GraphSearch:
         with snapshot_lock(self.cache_dir):
             return self._search(query, budget, limit, mode, model)
 
-    def _search_candidates(self, query, limit=8, mode=None, model=None):
+    def _search_candidates(self, query, limit=8, mode=None, model=None, *, include_neighbors=True):
         if not 1 <= limit <= 50:
             raise ValueError('limit must be 1..50')
         from .retrieval_settings import selected_mode
@@ -77,8 +77,6 @@ class GraphSearch:
         semantic_info = {ident: (score, chunk) for ident, score, chunk in semantic}
         ranked = fuse([r['id'] for r in lexical], [r[0] for r in semantic], limit)
         candidates = []
-        known = {ident for ident, _ in ranked}
-        hits = []
         for ident, signals in ranked:
             row = dict(self.db.execute('SELECT * FROM nodes WHERE id=?', (ident,)).fetchone())
             # Return the best matching part of long symbols, retaining its actual lines.
@@ -87,9 +85,11 @@ class GraphSearch:
                 row['_offset'] = chunk * PASSAGE_CHARS
                 row['_length'] = len(list(passages(row))[chunk][3])
             row['signals'] = signals
-            hits.append(row)
             candidates.append((row, 'search'))
-        for hit in hits:
+        if not include_neighbors:
+            return candidates, provider, mode
+        known = {ident for ident, _ in ranked}
+        for hit, _ in tuple(candidates):
             rows = self.db.execute('''SELECT nodes.* FROM edges JOIN nodes ON nodes.id =
                 CASE WHEN edges.source=? THEN edges.target ELSE edges.source END
                 WHERE (edges.source=? OR edges.target=?) AND edges.kind!='contains'
