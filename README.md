@@ -149,7 +149,7 @@ CodeManager includes a local stdio MCP server with nine tools:
 
 - `index_repository`: refresh the graph and publish the portable snapshot.
 - `get_context`: the single retrieval tool; batch questions, symbols, or node IDs,
-  with bounded expansion and per-node continuations under one shared byte budget.
+  with compact source excerpts and per-node continuations under one shared byte budget.
 - `graph_stats`: inspect counts.
 - `begin_task`: register a coding task when optional review is enabled.
 - `get_file_purpose`: read a file's current purpose and requirements before editing.
@@ -180,17 +180,26 @@ Use an absolute Python executable if your client environment differs from your
 terminal. One server instance is bound to one checkout. This project does not
 modify your global configuration or automatically register itself.
 
-Add guidance like this to the indexed project's `AGENTS.md`:
+### Retrieve just enough source
 
-> Start with the context supplied by the prompt hook. For gaps, batch independent
-> questions, exact symbols, or node IDs in one `get_context` call. It includes
-> bounded expansion; stop retrieving when sufficient. Use per-node offsets for
-> batched continuations. The server refreshes automatically. After editing files, call
-> `index_repository` before finishing to publish the final graph immediately.
-> Use one shared byte budget (12,000 by default; the prompt hook uses 6,000).
-> Use returned paths and line ranges for focused reads only for an unresolved
-> gap. Treat candidate edges as hints and verify source before editing. Report
-> retrieval failures before falling back to focused ripgrep.
+1. Start with the prompt hook. It returns up to two source nodes within a
+   3,500-byte budget. Use a focused `get_context` query if you need more evidence.
+2. Batch known definitions in `symbols`. Exact lookup accepts qualified names
+   such as `Cache.load` or `src/cache.py:Cache.load`. When the response lists
+   `called_symbols`, copy any names you need into `symbols` on the next request.
+   These graph-backed hints identify callees visible in the returned source.
+3. If a required definition is incomplete, send its entries from `pending`
+   with the latest `context_token`. That token lets retrieval skip source
+   you've already seen. Pass `include_related: true` when you need related source.
+4. If a needed range is still missing after a focused follow-up, have the agent
+   read that file and line range. The hook and MCP server supply source and hints.
+   The agent makes the fallback read.
+
+For example, an MCP follow-up can send
+`{"symbols":["src/cache.py:Cache.load"],"budget":4000}`. The MCP byte budget
+defaults to 12,000. See [repository guidance and retrieval examples](docs/node-context.md)
+for instructions you can put in the target project's `AGENTS.md`. After edits,
+call `index_repository` to publish the updated portable graph immediately.
 
 Codex MCP setup reference: https://developers.openai.com/learn/docs-mcp
 

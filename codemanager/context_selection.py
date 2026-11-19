@@ -90,6 +90,7 @@ def select(graph, queries, symbols, node_ids, offsets, limit, mode, model, inclu
     return selected, missing, deferred, actual_mode, actual_model
 
 
+
 def relationships(graph, selected, maximum, query=""):
     from .caller_context import callers, is_test
     hints, seen = [], set()

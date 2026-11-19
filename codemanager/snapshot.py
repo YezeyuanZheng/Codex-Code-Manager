@@ -259,6 +259,8 @@ def load_snapshot(graph, manifest):
         for row in rows['refs']:
             if nodes[row[0]][1] in replacing and row[0] in loaded:
                 graph.db.execute('INSERT INTO refs VALUES (?,?,?)', row)
+        from .method_calls import refresh
+        refresh(graph, replacing)
         # A removed or reloaded target can change an otherwise unchanged importer's edges.
         excluded = set(files) - sources.keys()
         graph.resolve_changes(removed | replacing | excluded)

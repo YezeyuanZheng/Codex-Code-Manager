@@ -1,7 +1,7 @@
-{"table":"files","values":["codemanager/snapshot.py","fea27624518a35f585d65c9a995f386ecaa08025ddfdf604a91734475aa08cb9"]}
+{"table":"files","values":["codemanager/snapshot.py","4dbc014fe1320f0d20f6d320743653a05d76448d978837f3fe504dcb0d0601f6"]}
 {"table":"nodes","values":["codemanager/snapshot.py:108:_export_snapshot.flush","codemanager/snapshot.py","_export_snapshot.flush","function",108,118,"[]"]}
 {"table":"nodes","values":["codemanager/snapshot.py:121:module_121","codemanager/snapshot.py","module_121","chunk",121,180,"[]"]}
-{"table":"nodes","values":["codemanager/snapshot.py:155:load_snapshot","codemanager/snapshot.py","load_snapshot","function",155,270,"[]"]}
+{"table":"nodes","values":["codemanager/snapshot.py:155:load_snapshot","codemanager/snapshot.py","load_snapshot","function",155,272,"[]"]}
 {"table":"nodes","values":["codemanager/snapshot.py:18:is_shard_name","codemanager/snapshot.py","is_shard_name","function",18,20,"[]"]}
 {"table":"nodes","values":["codemanager/snapshot.py:1:codemanager/snapshot.py","codemanager/snapshot.py","codemanager/snapshot.py","file",1,40,"[]"]}
 {"table":"nodes","values":["codemanager/snapshot.py:1:module_1","codemanager/snapshot.py","module_1","chunk",1,60,"[]"]}
@@ -76,8 +76,11 @@
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","len","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","len","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","len","calls"]}
+{"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","method_calls","imports"]}
+{"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","pathlib|PurePosixPath","imported_calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","purposes","imports"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","purposes","imports"]}
+{"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","refresh","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","requests","imports"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","requests","imports"]}
 {"table":"refs","values":["codemanager/snapshot.py:155:load_snapshot","review","imports"]}
@@ -100,6 +103,7 @@
 {"table":"refs","values":["codemanager/snapshot.py:1:codemanager/snapshot.py","pathlib","imports"]}
 {"table":"refs","values":["codemanager/snapshot.py:1:codemanager/snapshot.py","tempfile","imports"]}
 {"table":"refs","values":["codemanager/snapshot.py:27:atomic_write","Path","calls"]}
+{"table":"refs","values":["codemanager/snapshot.py:27:atomic_write","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:48:reusable_shard","file_signature","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:48:reusable_shard","graph","imports"]}
 {"table":"refs","values":["codemanager/snapshot.py:48:reusable_shard","is_shard_name","calls"]}
@@ -128,6 +132,7 @@
 {"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","len","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","len","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","len","calls"]}
+{"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","purposes","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","purposes","calls"]}
 {"table":"refs","values":["codemanager/snapshot.py:86:_export_snapshot","purposes","imports"]}

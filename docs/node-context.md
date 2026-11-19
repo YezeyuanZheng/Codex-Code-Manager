@@ -31,14 +31,16 @@ and an `offsets` mapping from requested node IDs to character offsets. Symbols
 accept exact/qualified names or `path.py:symbol`; ambiguous matches remain visible,
 and stale IDs or missing names appear under `unresolved` without discarding other
 matches. Exact-symbol/node-only requests bypass embeddings. The default shared
-budget is 12,000 serialized bytes. Omitting `limit` sizes selection to the budget
-and explicit requests (at least eight slots, at most fifty); an explicit `limit`
-remains a hard maximum. Mixed requests retain room for query matches.
+budget is 12,000 serialized bytes. Compact retrieval selects up to two nodes per
+query plus slots for explicitly requested symbols and IDs, capped at fifty.
+The prompt hook selects up to two nodes under a 3,500-byte budget. Related source is opt-in with
+`include_related: true`. Detailed retrieval sizes selection to the budget and
+explicit requests (eight to fifty slots). An explicit `limit` sets the maximum.
 The shared byte parameter is named `budget` in requests and responses. The
 deprecated `budget_bytes` input (CLI `--budget-bytes`) is accepted as an alias;
 supplying both names requires equal values.
 
-This operation combines discovery, selected source, and bounded one-hop context.
+This operation combines discovery and selected source, with optional one-hop context.
 Small definitions are completed where the shared budget permits, rather than
 always stopping at 1,200 characters. Each selection starts with a small excerpt;
 remaining space first completes explicit definitions, then search matches, then

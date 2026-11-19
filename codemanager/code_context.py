@@ -2,6 +2,7 @@
 import json
 
 from .context_selection import relationships, select, strings
+from .method_calls import called_methods
 from .source_coverage import SourceCoverage, add_reference, source_item
 
 
@@ -97,7 +98,7 @@ def pending_offsets(pending):
 
 
 def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
-                budget=None, limit=None, mode=None, model=None, include_related=True, budget_bytes=None,
+                budget=None, limit=None, mode=None, model=None, include_related=None, budget_bytes=None,
                 bm25_only=False, context_token=None, include_seen=False, compact=False, pending=None,
                 max_bytes=None):
     if type(compact) is not bool:
@@ -130,6 +131,11 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         node_ids = strings(list(dict.fromkeys([*continuations, *node_ids])), 'node_ids', 20)
     if not queries and not symbols and not node_ids:
         raise ValueError('Provide query, queries, symbols, node_ids, or pending')
+    if include_related is None:
+        include_related = not compact
+    focused = compact and include_related is False
+    if limit is None and focused:
+        limit = min(50, max(1, len(node_ids) + len(symbols) + 2*len(queries)))
     if limit is None:
         limit = min(50, max(8, budget//1500 if type(budget) is int else 8,
                             len(node_ids)+len(symbols)+min(2,len(queries))))
@@ -200,12 +206,13 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
                 break
             metadata = candidate
     grants = [0]*len(specs)
-    # Give each selection a starting excerpt before spending the rest on complete definitions.
-    for index, spec in enumerate(specs):
-        trial = grants.copy()
-        trial[index] = min(256, spec['length'])
-        if size(pack(specs, trial, metadata, budget, seen)) <= budget:
-            grants = trial
+    if not focused:
+        # Give each selection a starting excerpt before spending the rest on complete definitions.
+        for index, spec in enumerate(specs):
+            trial = grants.copy()
+            trial[index] = min(256, spec['length'])
+            if size(pack(specs, trial, metadata, budget, seen)) <= budget:
+                grants = trial
     # Explicit requests first, then implementation relationships, then search matches.
     # Otherwise small secondary hits can starve the integration bodies we expanded.
     for index in sorted(range(len(specs)), key=lambda i: (
@@ -242,4 +249,16 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         output['truncated'] = True
     if receipt:
         context_receipts.save(graph, receipt, previous, output)
-    return compact_response(output) if compact else output
+    if not compact:
+        return output
+    result = compact_response(output)
+    if focused:
+        hints = []
+        for symbol in called_methods(graph, output['results']):
+            candidate = [*hints, symbol]
+            if len(candidate) > 6 or size(candidate) > 500 or size({**result, 'called_symbols': candidate}) > budget:
+                break
+            hints = candidate
+        if hints:
+            result['called_symbols'] = hints
+    return result

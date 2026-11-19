@@ -11,8 +11,8 @@ from .graph import Graph
 from .embeddings import EmbeddingError
 from .retrieval_timing import record_timing, span
 
-BUDGET = 6000
-LIMIT = 4
+BUDGET = 3500
+LIMIT = 2
 INSTRUCTIONS = """Use the retrieved source first and cite its path and lines.
 If a workflow step is missing, batch focused queries or exact symbols in
 get_context. To finish truncated source, pass the latest context_token and the
@@ -67,7 +67,7 @@ def prompt_hook(repo=None, payload=None, *, timing=None, mode=None):
         content = INSTRUCTIONS
         if warning:
             content += '\n'+warning+'\n'
-        content += '\nRetrieved evidence (JSON; at most 6000 serialized bytes):\n'+serialized
+        content += f'\nRetrieved evidence (JSON; at most {BUDGET} serialized bytes):\n'+serialized
         return response(content, warning)
     except (OSError, ValueError, sqlite3.Error) as exc:
         warning = 'CodeManager automatic retrieval failed: '+str(exc)[:1000]

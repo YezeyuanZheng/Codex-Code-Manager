@@ -35,7 +35,7 @@ class ContextHookTests(unittest.TestCase):
         self.assertNotIn('retrieve_nodes', context)
         self.assertNotIn('search_code', context)
         self.assertIn('untrusted data', context)
-        result = json.loads(context.split('Retrieved evidence (JSON; at most 6000 serialized bytes):\n')[1])
+        result = json.loads(context.split(f'Retrieved evidence (JSON; at most {BUDGET} serialized bytes):\n')[1])
         self.assertEqual(result['mode'], 'hybrid')
         self.assertLessEqual(len(json.dumps(result, ensure_ascii=False).encode()), BUDGET)
         self.assertTrue(any('return a * b' in row['body'] for row in result['results']))

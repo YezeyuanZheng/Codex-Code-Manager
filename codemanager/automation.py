@@ -157,8 +157,9 @@ def seed_validation_cache(repo, destination):
             reader.execute('BEGIN')
             available = {row[0] for row in reader.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             tables = ('metadata', 'files', 'nodes', 'edges', 'refs', 'file_state',
-                      'snapshot_dirty', 'snapshot_buckets', 'shard_state')
+                      'snapshot_dirty', 'snapshot_buckets', 'shard_state', 'method_calls')
             with target.db:
+                target.db.execute("DELETE FROM metadata WHERE key='method_calls_v1'")
                 for table in tables:
                     if table not in available:
                         continue

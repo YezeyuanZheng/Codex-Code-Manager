@@ -76,6 +76,8 @@ class Graph(GraphSearch):
         from .cache_revisions import install
         install(self.db)
         try:
+            from .method_calls import initialize
+            initialize(self)
             if load_snapshot:
                 self.load_bundled_snapshot()
         except Exception:
@@ -305,6 +307,8 @@ class Graph(GraphSearch):
             deleted = set(cached) - seen
             for path in deleted:
                 self.remove(path)
+            from .method_calls import refresh
+            refresh(self, changed)
             affected = changed | deleted
             resolved = self.resolve_changes(affected) if affected else 0
             self.mark_dirty(affected)
@@ -331,6 +335,7 @@ class Graph(GraphSearch):
                 self.db.execute('DELETE FROM embeddings WHERE node_id=?', (ident,))
             self.db.execute('DELETE FROM search WHERE id=?', (ident,))
             self.db.execute('DELETE FROM refs WHERE source=?', (ident,))
+            self.db.execute('DELETE FROM method_calls WHERE source=?', (ident,))
             self.db.execute('DELETE FROM edges WHERE source=? OR target=?', (ident, ident))
         self.db.execute('DELETE FROM nodes WHERE path=?', (path,))
         self.db.execute('DELETE FROM files WHERE path=?', (path,))

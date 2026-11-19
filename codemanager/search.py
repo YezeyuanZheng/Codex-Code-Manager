@@ -7,7 +7,7 @@ from .source_coverage import SourceCoverage, add_reference, source_item
 
 class GraphSearch:
     def get_context(self, query=None, queries=None, symbols=None, node_ids=None, offsets=None,
-                    budget=None, limit=None, mode=None, model=None, include_related=True, budget_bytes=None,
+                    budget=None, limit=None, mode=None, model=None, include_related=None, budget_bytes=None,
                     bm25_only=False, context_token=None, include_seen=False, compact=False, pending=None,
                     max_bytes=None, **unknown):
         from .code_context import get_context

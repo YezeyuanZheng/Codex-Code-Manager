@@ -7,8 +7,10 @@ def context_tool():
         'name': 'get_context',
         'description': 'Retrieve repository source with citations under one byte budget. '
         'Batch focused queries for missing workflow steps and pass known exact names in symbols. '
+        'Use called_symbols for exact follow-ups when a visible call needs its definition. '
         'Resume truncated source with context_token and the needed entries copied from pending. '
-        'Set compact=false for graph diagnostics. The repository is already bound.',
+        'Set include_related=true to expand related source or compact=false for graph diagnostics. '
+        'The repository is already bound.',
         'inputSchema': {'type': 'object', 'properties': {
             'query': {'type': 'string'},
             'queries': {**strings, 'maxItems': 8},
@@ -36,6 +38,7 @@ def context_tool():
                           'description':'Use keyword-only BM25 without initializing or embedding a model.'},
             'mode': {'type': 'string', 'enum': ['hybrid', 'bm25', 'semantic']},
             'model': {'type': 'string'},
-            'include_related': {'type': 'boolean', 'default': True}},
+            'include_related': {'type': 'boolean',
+                                'description': 'Expand related source. Defaults to false in compact mode.'}},
             'anyOf': [{'required': [name]} for name in ('query', 'queries', 'symbols', 'node_ids', 'pending')],
             'additionalProperties': False}}

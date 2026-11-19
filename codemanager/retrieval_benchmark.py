@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import statistics
 import subprocess
@@ -40,9 +41,9 @@ def measure(repo, prompt):
     metrics = value['metrics']
     metrics['process_wall_ms'] = wall
     content = value['response'].get('hookSpecificOutput', {}).get('additionalContext', '')
-    marker = 'Retrieved evidence (JSON; at most 6000 serialized bytes):\n'
-    if marker in content:
-        evidence = json.loads(content.split(marker, 1)[1])
+    marker = re.search(r"^Retrieved evidence \(JSON; at most [0-9]+ serialized bytes\):\n", content, re.M)
+    if marker:
+        evidence = json.loads(content[marker.end():])
         metrics['paths'] = sorted({item['path'] for item in evidence.get('results', [])})
     return metrics
 

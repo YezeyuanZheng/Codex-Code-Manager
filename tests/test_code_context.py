@@ -130,6 +130,26 @@ class CodeContextTests(unittest.TestCase):
             self.assertEqual(item['offset'], cursors[item['id']])
         self.assert_disjoint(followup)
 
+    def test_compact_method_hints_offer_exact_followup_without_callee_source(self):
+        self.source.write_text(
+            'class Manager:\n'
+            '    def start(self):\n'
+            '        return self._configure()\n'
+            '    def _configure(self):\n'
+            '        return 42\n'
+        )
+        self.graph.index()
+        result = self.graph.get_context(symbols=['Manager.start'], compact=True)
+        self.assertEqual(result['called_symbols'], ['app.py:Manager._configure'])
+        self.assertEqual(len(result['results']), 1)
+        followup = self.graph.get_context(symbols=result['called_symbols'],
+                                          context_token=result['context_token'], compact=True)
+        self.assertIn('return 42', followup['results'][0]['body'])
+
+        self.source.write_text(self.source.read_text().replace('return self._configure()', 'return 0'))
+        self.graph.index()
+        self.assertEqual(self.graph.db.execute('SELECT count(*) FROM method_calls').fetchone()[0], 0)
+
     def test_compact_pending_can_be_sent_back_and_preserves_complete_lines(self):
         source = 'def long_method():\n' + ''.join(
             f'    value_{index} = {index}\n' for index in range(100)
