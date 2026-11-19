@@ -338,3 +338,7 @@ and stage its matching graph snapshot as for other indexed files.
 - [Independent file limits and Codex setup](docs/file-limits.md)
 - [Automatic retrieved context in Codex](docs/context.md)
 - [Relevant graph nodes and bounded review evidence](docs/node-context.md)
+
+## License
+
+CodeManager is licensed under the [Apache License 2.0](LICENSE).

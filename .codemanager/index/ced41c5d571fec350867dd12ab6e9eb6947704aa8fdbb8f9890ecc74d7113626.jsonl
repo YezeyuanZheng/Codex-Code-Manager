@@ -42,6 +42,7 @@
 {"table":"refs","values":["codemanager/codex_hooks.py:77:install","isinstance","calls"]}
 {"table":"refs","values":["codemanager/codex_hooks.py:77:install","isinstance","calls"]}
 {"table":"refs","values":["codemanager/codex_hooks.py:77:install","merge_hook","calls"]}
+{"table":"refs","values":["codemanager/codex_hooks.py:77:install","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/codex_hooks.py:77:install","str","calls"]}
 {"table":"refs","values":["codemanager/codex_hooks.py:77:install","str","calls"]}
 {"table":"refs","values":["codemanager/codex_hooks.py:77:install","str","calls"]}

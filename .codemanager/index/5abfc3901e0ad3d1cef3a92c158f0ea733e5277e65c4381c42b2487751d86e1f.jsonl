@@ -20,5 +20,6 @@
 {"table":"refs","values":["codemanager/retrieval_settings.py:24:configure","Path","calls"]}
 {"table":"refs","values":["codemanager/retrieval_settings.py:24:configure","ValueError","calls"]}
 {"table":"refs","values":["codemanager/retrieval_settings.py:24:configure","atomic_write","calls"]}
+{"table":"refs","values":["codemanager/retrieval_settings.py:24:configure","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/retrieval_settings.py:24:configure","read_config","calls"]}
 {"table":"refs","values":["codemanager/retrieval_settings.py:24:configure","selected_mode","calls"]}

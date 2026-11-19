@@ -27,6 +27,7 @@
 {"table":"refs","values":["codemanager/context_receipts.py:32:coverage","tuple","calls"]}
 {"table":"refs","values":["codemanager/context_receipts.py:32:coverage","tuple","calls"]}
 {"table":"refs","values":["codemanager/context_receipts.py:39:token","uuid4","calls"]}
+{"table":"refs","values":["codemanager/context_receipts.py:39:token","uuid|uuid4","imported_calls"]}
 {"table":"refs","values":["codemanager/context_receipts.py:43:save","atomic_write","calls"]}
 {"table":"refs","values":["codemanager/context_receipts.py:43:save","coverage","calls"]}
 {"table":"refs","values":["codemanager/context_receipts.py:43:save","dict","calls"]}

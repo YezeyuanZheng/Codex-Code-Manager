@@ -25,6 +25,7 @@
 {"table":"refs","values":["codemanager/config.py:19:read_config","ValueError","calls"]}
 {"table":"refs","values":["codemanager/config.py:19:read_config","isinstance","calls"]}
 {"table":"refs","values":["codemanager/config.py:19:read_config","isinstance","calls"]}
+{"table":"refs","values":["codemanager/config.py:19:read_config","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/config.py:19:read_config","validate_model","calls"]}
 {"table":"refs","values":["codemanager/config.py:1:codemanager/config.py","json","imports"]}
 {"table":"refs","values":["codemanager/config.py:1:codemanager/config.py","os","imports"]}
@@ -36,6 +37,7 @@
 {"table":"refs","values":["codemanager/config.py:47:model_settings","Path","calls"]}
 {"table":"refs","values":["codemanager/config.py:47:model_settings","ValueError","calls"]}
 {"table":"refs","values":["codemanager/config.py:47:model_settings","atomic_write","calls"]}
+{"table":"refs","values":["codemanager/config.py:47:model_settings","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/config.py:47:model_settings","read_config","calls"]}
 {"table":"refs","values":["codemanager/config.py:47:model_settings","selected_model","calls"]}
 {"table":"refs","values":["codemanager/config.py:47:model_settings","snapshot","imports"]}

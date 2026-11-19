@@ -52,6 +52,7 @@
 {"table":"refs","values":["codemanager/file_limits.py:103:excluded","Path","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:103:excluded","any","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:103:excluded","graph","imports"]}
+{"table":"refs","values":["codemanager/file_limits.py:103:excluded","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:108:check_tree","excluded","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:108:check_tree","git","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:108:check_tree","git","calls"]}
@@ -88,6 +89,7 @@
 {"table":"refs","values":["codemanager/file_limits.py:35:configure","atomic_write","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:35:configure","from_config","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:35:configure","isinstance","calls"]}
+{"table":"refs","values":["codemanager/file_limits.py:35:configure","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:35:configure","positive","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:35:configure","positive","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:35:configure","read_config","calls"]}
@@ -95,6 +97,8 @@
 {"table":"refs","values":["codemanager/file_limits.py:56:git","str","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:63:root","Path","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:63:root","Path","calls"]}
+{"table":"refs","values":["codemanager/file_limits.py:63:root","pathlib|Path","imported_calls"]}
+{"table":"refs","values":["codemanager/file_limits.py:63:root","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:63:root","str","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","Path","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","ValueError","calls"]}
@@ -102,6 +106,7 @@
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","git","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","git","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","graph","imports"]}
+{"table":"refs","values":["codemanager/file_limits.py:69:paths","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","sorted","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","sorted","calls"]}
 {"table":"refs","values":["codemanager/file_limits.py:69:paths","str","calls"]}

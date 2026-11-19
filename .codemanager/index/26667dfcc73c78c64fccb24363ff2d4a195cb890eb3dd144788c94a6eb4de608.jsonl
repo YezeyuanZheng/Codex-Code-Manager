@@ -12,11 +12,14 @@
 {"table":"edges","values":["tests/test_node_context.py:11:NodeContextTests","tests/test_node_context.py:36:NodeContextTests.test_budget_long_nodes_and_stale_ids","contains"]}
 {"table":"edges","values":["tests/test_node_context.py:11:NodeContextTests","tests/test_node_context.py:50:NodeContextTests.test_legacy_cli_and_combined_mcp_context","contains"]}
 {"table":"edges","values":["tests/test_node_context.py:11:NodeContextTests","tests/test_node_context.py:63:NodeContextTests.test_node_continuation_does_not_skip_source_after_budget_truncation","contains"]}
+{"table":"edges","values":["tests/test_node_context.py:12:NodeContextTests.setUp","codemanager/graph.py:30:Graph","test_calls_candidate"]}
 {"table":"edges","values":["tests/test_node_context.py:1:tests/test_node_context.py","codemanager/graph.py:1:codemanager/graph.py","imports_candidate"]}
 {"table":"edges","values":["tests/test_node_context.py:1:tests/test_node_context.py","tests/test_node_context.py:11:NodeContextTests","contains"]}
 {"table":"edges","values":["tests/test_node_context.py:1:tests/test_node_context.py","tests/test_node_context.py:1:module_1","contains"]}
 {"table":"refs","values":["tests/test_node_context.py:12:NodeContextTests.setUp","Graph","calls"]}
 {"table":"refs","values":["tests/test_node_context.py:12:NodeContextTests.setUp","Path","calls"]}
+{"table":"refs","values":["tests/test_node_context.py:12:NodeContextTests.setUp","codemanager.graph|Graph","imported_calls"]}
+{"table":"refs","values":["tests/test_node_context.py:12:NodeContextTests.setUp","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["tests/test_node_context.py:1:tests/test_node_context.py","codemanager.graph","imports"]}
 {"table":"refs","values":["tests/test_node_context.py:1:tests/test_node_context.py","json","imports"]}
 {"table":"refs","values":["tests/test_node_context.py:1:tests/test_node_context.py","pathlib","imports"]}

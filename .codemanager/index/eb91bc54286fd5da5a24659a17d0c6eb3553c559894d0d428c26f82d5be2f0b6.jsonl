@@ -94,6 +94,7 @@
 {"table":"refs","values":["codemanager/review.py:105:file_versions","context","calls"]}
 {"table":"refs","values":["codemanager/review.py:105:file_versions","digest","calls"]}
 {"table":"refs","values":["codemanager/review.py:105:file_versions","digest","calls"]}
+{"table":"refs","values":["codemanager/review.py:105:file_versions","pathlib|PurePosixPath","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:105:file_versions","str","calls"]}
 {"table":"refs","values":["codemanager/review.py:124:map_change","ValueError","calls"]}
 {"table":"refs","values":["codemanager/review.py:124:map_change","context","calls"]}
@@ -111,8 +112,10 @@
 {"table":"refs","values":["codemanager/review.py:140:tree_id","git","calls"]}
 {"table":"refs","values":["codemanager/review.py:140:tree_id","git","calls"]}
 {"table":"refs","values":["codemanager/review.py:140:tree_id","head","calls"]}
+{"table":"refs","values":["codemanager/review.py:140:tree_id","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:140:tree_id","str","calls"]}
 {"table":"refs","values":["codemanager/review.py:153:policy_for_tree","Path","calls"]}
+{"table":"refs","values":["codemanager/review.py:153:policy_for_tree","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:153:policy_for_tree","settings","calls"]}
 {"table":"refs","values":["codemanager/review.py:153:policy_for_tree","str","calls"]}
 {"table":"refs","values":["codemanager/review.py:15:git","ValueError","calls"]}
@@ -124,6 +127,7 @@
 {"table":"refs","values":["codemanager/review.py:188:checkout_fingerprint","Path","calls"]}
 {"table":"refs","values":["codemanager/review.py:188:checkout_fingerprint","bool","calls"]}
 {"table":"refs","values":["codemanager/review.py:188:checkout_fingerprint","digest","calls"]}
+{"table":"refs","values":["codemanager/review.py:188:checkout_fingerprint","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:188:checkout_fingerprint","sorted","calls"]}
 {"table":"refs","values":["codemanager/review.py:188:checkout_fingerprint","sorted","calls"]}
 {"table":"refs","values":["codemanager/review.py:1:codemanager/review.py","hashlib","imports"]}
@@ -168,6 +172,8 @@
 {"table":"refs","values":["codemanager/review.py:204:review","head","calls"]}
 {"table":"refs","values":["codemanager/review.py:204:review","head","calls"]}
 {"table":"refs","values":["codemanager/review.py:204:review","materialize_tree","calls"]}
+{"table":"refs","values":["codemanager/review.py:204:review","pathlib|Path","imported_calls"]}
+{"table":"refs","values":["codemanager/review.py:204:review","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:204:review","policy_for_tree","calls"]}
 {"table":"refs","values":["codemanager/review.py:204:review","prepare_evidence","calls"]}
 {"table":"refs","values":["codemanager/review.py:204:review","purposes","calls"]}
@@ -204,12 +210,14 @@
 {"table":"refs","values":["codemanager/review.py:28:validate_context","len","calls"]}
 {"table":"refs","values":["codemanager/review.py:28:validate_context","len","calls"]}
 {"table":"refs","values":["codemanager/review.py:28:validate_context","len","calls"]}
+{"table":"refs","values":["codemanager/review.py:28:validate_context","pathlib|PurePosixPath","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:28:validate_context","set","calls"]}
 {"table":"refs","values":["codemanager/review.py:28:validate_context","set","calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","Path","calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","ValueError","calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","head","calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","load_report","calls"]}
+{"table":"refs","values":["codemanager/review.py:293:require_review","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","policy_for_tree","calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","review_key","calls"]}
 {"table":"refs","values":["codemanager/review.py:293:require_review","tree_id","calls"]}

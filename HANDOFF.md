@@ -3,6 +3,27 @@
 The goal is complete source coverage with less model-facing context and lower
 retrieval and session latency. The prompt hook uses hybrid retrieval by default.
 
+## Graph-backed hints evaluation
+
+The 16-session run used GPT-6.2 Sol at low reasoning across four arms and the
+same four frozen pytest prompts. The prompt hook now returns up to two source
+nodes under 3,500 bytes. Compact MCP retrieval can return graph-backed
+`called_symbols` hints for exact follow-up lookups.
+
+| Arm | Bodies before shell | Final bodies | Input tokens | Total wall time |
+| --- | ---: | ---: | ---: | ---: |
+| Default Codex | — | 11/13 | 537,213 | 214.49 s |
+| Strict hybrid | 12/13 | 12/13 | 397,748 | 208.61 s |
+| Strict BM25 | 12/13 | 12/13 | 398,253 | 215.36 s |
+| BM25 with hybrid override | 12/13 | 12/13 | 410,526 | 231.90 s |
+
+Wall time includes hook startup and shell calls. Input tokens are session totals.
+All three retrieval arms missed `PytestPluginManager._import_plugin_specs`.
+Strict hybrid surfaced its exact name in `called_symbols`. A separate replay
+added one targeted shell read and raised strict-hybrid coverage to 13/13.
+The replay did not measure agent-selected fallback or its input-token cost.
+Raw traces are local benchmark artifacts.
+
 ## Current implementation
 
 - The prompt hook and MCP `get_context` return compact source spans, context
@@ -19,10 +40,10 @@ retrieval and session latency. The prompt hook uses hybrid retrieval by default.
   heap-based top-K ranking and a bounded cache for source line offsets.
   An ASCII caller prefilter was tested and dropped after an inconsistent repeat.
 
-## Frozen pytest results
+## Archived frozen pytest baseline
 
 The four questions use pytest at `36eed6b7b0eb59760fc4b33e90bdaac5057388f0`.
-The latest live report is in the Git-ignored bundle
+The archived baseline is in the Git-ignored bundle
 `.codemanager/retrieval-eval-sol-low-GQuu16JT/`. It combines 12 original sessions
 with four refreshed strict-hybrid sessions. All used GPT-6.2 Sol at low
 reasoning. CodeManager revisions differ by arm and are recorded in `setup.json`.

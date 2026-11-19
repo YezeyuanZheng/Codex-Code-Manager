@@ -56,6 +56,7 @@
 {"table":"refs","values":["codemanager/review_config.py:67:configure","automation","imports"]}
 {"table":"refs","values":["codemanager/review_config.py:67:configure","guidance_update","calls"]}
 {"table":"refs","values":["codemanager/review_config.py:67:configure","install_hook","calls"]}
+{"table":"refs","values":["codemanager/review_config.py:67:configure","pathlib|Path","imported_calls"]}
 {"table":"refs","values":["codemanager/review_config.py:67:configure","read_config","calls"]}
 {"table":"refs","values":["codemanager/review_config.py:67:configure","settings","calls"]}
 {"table":"refs","values":["codemanager/review_config.py:67:configure","settings","calls"]}

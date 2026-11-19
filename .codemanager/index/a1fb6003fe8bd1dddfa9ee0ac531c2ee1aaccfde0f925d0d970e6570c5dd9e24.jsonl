@@ -1,0 +1,4 @@
+{"table":"files","values":["pyproject.toml","df3b29a03aa4e6d39ad51a708aa83a4fd980e86e92a189caf731825a0f924283"]}
+{"table":"nodes","values":["pyproject.toml:1:chunk_1","pyproject.toml","chunk_1","chunk",1,17,"[]"]}
+{"table":"nodes","values":["pyproject.toml:1:pyproject.toml","pyproject.toml","pyproject.toml","file",1,17,"[]"]}
+{"table":"edges","values":["pyproject.toml:1:pyproject.toml","pyproject.toml:1:chunk_1","contains"]}
