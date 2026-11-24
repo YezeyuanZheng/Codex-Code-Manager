@@ -85,6 +85,7 @@ def export_snapshot(graph, *, output_dir=None, full=False):
 
 def _export_snapshot(graph, *, output_dir=None, full=False):
     from .graph import bucket_for, file_signature
+    from .python_chunks import PYTHON_CHUNKS
     refreshed = graph.index(full=full)
     folder = Path(output_dir) if output_dir is not None else graph.repo / '.codemanager' / 'index'
     folder.mkdir(parents=True, exist_ok=True)
@@ -129,6 +130,8 @@ def _export_snapshot(graph, *, output_dir=None, full=False):
         shards = [entry for entries in partitions.values() for entry in entries]
         from .review import context
         info = {'format': FORMAT, 'buckets': {key: [entry['file'] for entry in value] for key, value in partitions.items()}, 'shards': shards}
+        if not refreshed['unreadable_files']:
+            info['python_chunks'] = PYTHON_CHUNKS
         if context(graph) is not None:
             info['review'] = context(graph)
         from .purposes import purposes
@@ -229,6 +232,7 @@ def load_snapshot(graph, manifest):
         raise ValueError(f'Invalid snapshot: {exc}') from exc
 
     from .graph import bucket_for, file_signature
+    from .python_chunks import PYTHON_CHUNKS
     with graph.db:
         from .review import set_context
         set_context(graph, review_context)
@@ -266,7 +270,11 @@ def load_snapshot(graph, manifest):
         graph.resolve_changes(removed | replacing | excluded)
         graph.mark_dirty(removed | replacing | excluded)
         graph._read_mapping_snapshot = True
-        graph.index()
+        if info.get('python_chunks') == PYTHON_CHUNKS:
+            graph.db.execute("INSERT OR REPLACE INTO metadata VALUES ('python_chunks',?)", (PYTHON_CHUNKS,))
+        else:
+            graph.db.execute("DELETE FROM metadata WHERE key='python_chunks'")
+        graph.index(upgrade_chunks=info['format'] == FORMAT)
         graph.db.execute('DELETE FROM snapshot_buckets')
         graph.db.executemany('INSERT INTO snapshot_buckets VALUES (?,?)', ((key, json.dumps(value, sort_keys=True)) for key, value in partitions.items()))
         graph.db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', ('snapshot', hashlib.sha256(manifest).hexdigest()))

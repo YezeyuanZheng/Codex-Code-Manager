@@ -1,0 +1,15 @@
+{"table":"files","values":["codemanager/case_diagnostics.py","e3986cc84ddb0be424524f07706598375ca4c4872b5192000cd10e23ccfce011"]}
+{"table":"nodes","values":["codemanager/case_diagnostics.py:1:codemanager/case_diagnostics.py","codemanager/case_diagnostics.py","codemanager/case_diagnostics.py","file",1,38,"[]"]}
+{"table":"nodes","values":["codemanager/case_diagnostics.py:1:module_1","codemanager/case_diagnostics.py","module_1","chunk",1,4,"[]"]}
+{"table":"nodes","values":["codemanager/case_diagnostics.py:5:diagnose","codemanager/case_diagnostics.py","diagnose","function",5,38,"[]"]}
+{"table":"edges","values":["codemanager/case_diagnostics.py:1:codemanager/case_diagnostics.py","codemanager/case_diagnostics.py:1:module_1","contains"]}
+{"table":"edges","values":["codemanager/case_diagnostics.py:1:codemanager/case_diagnostics.py","codemanager/case_diagnostics.py:5:diagnose","contains"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:1:codemanager/case_diagnostics.py","source_coverage","imports"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","SourceCoverage","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","ValueError","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","len","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","len","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","list","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","list","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","set","calls"]}
+{"table":"refs","values":["codemanager/case_diagnostics.py:5:diagnose","set","calls"]}

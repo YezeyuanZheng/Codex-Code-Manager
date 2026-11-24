@@ -71,19 +71,26 @@ class GraphSearch:
         pool = max(30, limit*4)
         lexical = self.db.execute('''SELECT nodes.*, bm25(search,0,8,3,1) AS rank FROM search
             JOIN nodes ON search.id=nodes.id WHERE search MATCH ? ORDER BY rank, nodes.id LIMIT ?''', (match, pool)).fetchall() if tokens and mode != 'semantic' else []
-        from .embeddings import PASSAGE_CHARS, dense_search, fuse, passages
+        from .embeddings import dense_search, fuse, owned_ranges, passage_spans
         provider = self.embedding_provider(model) if mode != 'bm25' else None
         semantic = dense_search(self, provider, query, pool) if provider is not None else []
         semantic_info = {ident: (score, chunk) for ident, score, chunk in semantic}
         ranked = fuse([r['id'] for r in lexical], [r[0] for r in semantic], limit)
         candidates = []
+        ranges_by_path = {}
         for ident, signals in ranked:
             row = dict(self.db.execute('SELECT * FROM nodes WHERE id=?', (ident,)).fetchone())
             # Return the best matching part of long symbols, retaining its actual lines.
             if ident in semantic_info:
                 _, chunk = semantic_info[ident]
-                row['_offset'] = chunk * PASSAGE_CHARS
-                row['_length'] = len(list(passages(row))[chunk][3])
+                path = row['path']
+                if path not in ranges_by_path:
+                    nodes = self.db.execute(
+                        "SELECT id,kind,start,end FROM nodes WHERE path=? AND kind!='file'", (path,))
+                    ranges_by_path[path] = owned_ranges(nodes)
+                offset, _, body = list(passage_spans(row, ranges_by_path[path][ident]))[chunk]
+                row['_offset'] = offset
+                row['_length'] = len(body)
             row['signals'] = signals
             candidates.append((row, 'search'))
         if not include_neighbors:

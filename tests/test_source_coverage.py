@@ -73,6 +73,37 @@ class SourceCoverageTests(unittest.TestCase):
         self.assertEqual(''.join(item['body'] for item in result['results']).count('return 17'), 1)
         self.assertIn('return 23', ''.join(item['body'] for item in result['results']))
 
+    def test_module_chunks_stop_at_definitions(self):
+        self.source.write_text('import math\n@decorate\ndef run():\n    return 17\nLIMIT = 10\n')
+        self.graph.index()
+        chunks = self.graph.db.execute(
+            "SELECT start,end,body FROM nodes WHERE kind='chunk' ORDER BY start")
+        self.assertEqual([tuple(row) for row in chunks],
+                         [(1, 1, 'import math'), (5, 5, 'LIMIT = 10')])
+
+    def test_class_overview_includes_unseen_method_signature_only(self):
+        from codemanager.class_overview import method_signatures
+        self.source.write_text('class Box:\n    @property\n    def size(\n'
+                               '        self,\n    ) -> int:\n        return 17\n')
+        self.graph.index()
+        cls = {'id': 'app.py:1:Box', 'path': 'app.py', 'start': 1, 'body': 'class Box:'}
+        method = dict(self.graph.db.execute("SELECT * FROM nodes WHERE name='Box.size'").fetchone())
+        signatures = list(method_signatures(self.graph, {cls['id']}, [cls], {}))
+        self.assertEqual(signatures, [{'name': 'Box.size', 'path': 'app.py', 'start': 2,
+                                      'signature': method['body'].rsplit('\n', 1)[0]}])
+        self.assertEqual(list(method_signatures(self.graph, {cls['id']}, [cls, method], {})), [])
+
+    def test_compact_exact_lookup_includes_one_small_local_callee(self):
+        self.source.write_text('class Box:\n    def size(self):\n        return self.measure()\n'
+                               '    def measure(self):\n        return self.finish()\n'
+                               '    def finish(self):\n        return 17\n')
+        self.graph.index()
+        result = self.graph.get_context(symbols=['Box.size'], compact=True, budget=2500)
+        self.assertEqual([row['start'] for row in result['results']], [2, 4])
+        follow_up = self.graph.get_context(symbols=['Box.measure'], compact=True, budget=2500,
+                                           context_token=result['context_token'])
+        self.assertFalse(follow_up['results'])
+
     def test_semantic_passage_midline_does_not_hide_the_rest_of_that_line(self):
         self.source.write_text('def long_value():\n    return "'+'é'*2400+'"\n')
         self.graph.index()

@@ -8,6 +8,7 @@ import re
 import sqlite3
 import subprocess
 from .locking import snapshot_lock
+from .python_chunks import PYTHON_CHUNKS, module_ranges
 from .search import GraphSearch
 
 
@@ -170,11 +171,15 @@ class Graph(GraphSearch):
                 for alias in node.names:
                     imported[alias.asname or alias.name.split('.')[0]] = (alias.name, None)
 
+        definitions = []
+
         def visit(node, parent, prefix):
             for child in ast.iter_child_nodes(node):
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                     name = '.'.join(prefix + [child.name])
                     start = min([child.lineno] + [d.lineno for d in child.decorator_list])
+                    if parent == file_id:
+                        definitions.append((start, child.end_lineno))
                     ident = self.add(path, name, 'class' if isinstance(child, ast.ClassDef) else 'function', start, child.end_lineno, lines)
                     self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (parent, ident, 'contains'))
                     visit(child, ident, prefix + [child.name])
@@ -193,14 +198,9 @@ class Graph(GraphSearch):
                     visit(child, parent, prefix)
         visit(tree, file_id, [])
         # Cover module-level constants, imports, and code outside definitions.
-        covered = set()
-        for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                covered.update(range(min([node.lineno] + [d.lineno for d in node.decorator_list]), node.end_lineno+1))
-        for offset in range(0, len(lines), 60):
-            if any(n not in covered for n in range(offset+1, min(offset+60, len(lines))+1)):
-                ident = self.add(path, f'module_{offset+1}', 'chunk', offset+1, min(offset+60, len(lines)), lines)
-                self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (file_id, ident, 'contains'))
+        for start, stop in module_ranges(lines, definitions):
+            ident = self.add(path, f'module_{start}', 'chunk', start, stop, lines)
+            self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)', (file_id, ident, 'contains'))
 
     def revision_changes(self):
         previous = self.db.execute("SELECT value FROM metadata WHERE key='revision'").fetchone()
@@ -265,7 +265,7 @@ class Graph(GraphSearch):
             self.db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)',
                             (ref['source'], targets[0]['id'], edge_kind))
 
-    def index(self, *, full=False):
+    def index(self, *, full=False, upgrade_chunks=True):
         from .requests import bundled_mappings, validate_mappings, restore_mappings
         mappings = bundled_mappings(self) if getattr(self, '_read_mapping_snapshot', False) else {}
         self._read_mapping_snapshot = False
@@ -276,11 +276,14 @@ class Graph(GraphSearch):
         previous, revision, revision_paths = self.revision_changes()
         cached = {row['path']: row['digest'] for row in self.db.execute('SELECT path,digest FROM files')}
         states = {row['path']: row['signature'] for row in self.db.execute('SELECT * FROM file_state')}
+        chunks = self.db.execute("SELECT value FROM metadata WHERE key='python_chunks'").fetchone()
+        reparse_chunks = upgrade_chunks and (chunks is None or chunks[0] != PYTHON_CHUNKS)
         with self.db:
             for path, source in self.paths():
+                reparse = full or (reparse_chunks and path.endswith('.py'))
                 try:
                     signature = file_signature(source)
-                    if not full and path in cached and states.get(path) == signature and revision_paths is not None and path not in revision_paths:
+                    if not reparse and path in cached and states.get(path) == signature and revision_paths is not None and path not in revision_paths:
                         seen.add(path)
                         continue
                     raw = source.read_bytes()
@@ -295,7 +298,7 @@ class Graph(GraphSearch):
                     continue
                 seen.add(path)
                 digest = hashlib.sha256(raw).hexdigest()
-                if full or cached.get(path) != digest:
+                if reparse or cached.get(path) != digest:
                     self.remove(path, keep_embeddings=True)
                     self.parse(path, text)
                     self.db.execute('INSERT OR REPLACE INTO files VALUES (?,?,?)', (path, digest, bucket_for(path)))
@@ -319,6 +322,8 @@ class Graph(GraphSearch):
                 self.db.execute('DELETE FROM embeddings WHERE node_id NOT IN (SELECT id FROM nodes)')
             if revision and revision != previous:
                 self.db.execute("INSERT OR REPLACE INTO metadata VALUES ('revision',?)", (revision,))
+            if upgrade_chunks and not warnings:
+                self.db.execute("INSERT OR REPLACE INTO metadata VALUES ('python_chunks',?)", (PYTHON_CHUNKS,))
         with self.db:
             restore_mappings(self, mappings)
             from .review import sync_scope

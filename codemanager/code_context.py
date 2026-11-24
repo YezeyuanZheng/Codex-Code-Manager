@@ -1,6 +1,7 @@
 """One-call code context with batched lookup, expansion, and a shared byte budget."""
 import json
 
+from .class_overview import method_signatures
 from .context_selection import relationships, select, strings
 from .method_calls import called_methods
 from .source_coverage import SourceCoverage, add_reference, source_item
@@ -81,6 +82,36 @@ def compact_response(output):
     return result
 
 
+def add_wrapper_callee(graph, output, seen, budget):
+    """Include one small local callee of a fully retrieved, requested wrapper."""
+    from .context_receipts import coverage as prior_coverage
+    items = output['results']
+    wrappers = [item for item in items if item['reason'] in ('symbol', 'requested')
+                and not item['truncated'] and 0 < len(item['body']) <= 400]
+    if not wrappers:
+        return
+    coverage = prior_coverage(seen)
+    for item in items:
+        coverage.add(item, 0, len(item['body']))
+    for symbol in called_methods(graph, sorted(wrappers, key=lambda item: len(item['body']))):
+        path, _, name = symbol.rpartition(':')
+        rows = graph.db.execute(
+            "SELECT * FROM nodes WHERE path=? AND name=? AND kind='function' LIMIT 2", (path, name)
+        ).fetchall()
+        if len(rows) != 1:
+            continue
+        row = rows[0]
+        length = len(row['body'])
+        if not 0 < length <= 800 or list(coverage.uncovered(row)) != [(0, length)]:
+            continue
+        item = {key: row[key] for key in ('id', 'path', 'name')}
+        item.update(source_item(row, 0, length), reason='related', truncated=False)
+        items.append(item)
+        if size(compact_response(output)) <= budget:
+            break
+        items.pop()
+
+
 def pending_offsets(pending):
     if not isinstance(pending, list) or not 1 <= len(pending) <= 20:
         raise ValueError('pending must contain 1 to 20 continuation entries')
@@ -134,6 +165,7 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
     if include_related is None:
         include_related = not compact
     focused = compact and include_related is False
+    expand_wrapper = focused and limit is None and bool(symbols or node_ids)
     if limit is None and focused:
         limit = min(50, max(1, len(node_ids) + len(symbols) + 2*len(queries)))
     if limit is None:
@@ -247,11 +279,17 @@ def get_context(graph, query=None, queries=None, symbols=None, node_ids=None, of
         else:
             raise ValueError('Context metadata cannot fit the requested budget')
         output['truncated'] = True
+    if expand_wrapper and len(specs) < 50:
+        add_wrapper_callee(graph, output, seen, budget)
     if receipt:
         context_receipts.save(graph, receipt, previous, output)
+    classes = {spec['row']['id'] for spec in specs if spec['row']['kind'] == 'class'}
+    signatures = method_signatures(graph, classes, output['results'], seen)
     if not compact:
+        append_metadata(output, 'method_signatures', signatures, budget)
         return output
     result = compact_response(output)
+    append_metadata(result, 'method_signatures', signatures, budget)
     if focused:
         hints = []
         for symbol in called_methods(graph, output['results']):

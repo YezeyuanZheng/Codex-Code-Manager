@@ -30,6 +30,8 @@ sufficient. For gaps, batch independent questions, exact symbols, or node IDs in
 one `get_context` call or `context --repo . --query "QUESTION" --symbol NAME`
 command. This combines search, selected source, and bounded one-hop relationships
 (callers, callees, imports, containers); no extra node expansion is required.
+Pass any `called_symbols` entry whose definition you need back to `get_context`
+in `symbols` before reading that definition through the shell.
 Batch continuations with per-node offsets or repeatable `--cursor "ID=OFFSET"`.
 `get_context` is the only MCP retrieval tool. Only after it leaves a specific
 gap should you read source

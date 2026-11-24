@@ -130,6 +130,23 @@ class HybridTests(unittest.TestCase):
             result = self.graph.search('protected endpoint', budget=budget, mode='hybrid')
             self.assertLessEqual(len(json.dumps(result, ensure_ascii=False).encode()), budget)
 
+    def test_overlapping_nodes_embed_source_once_and_return_original_offsets(self):
+        (self.root / 'access.py').write_text(
+            'MODULE_SETTING = 1\n'
+            'class Access:\n'
+            '    def permit(self):\n'
+            '        return "METHOD_MARKER"\n'
+            '    TAIL_MARKER = 2\n'
+        )
+        self.graph.index()
+        result = self.graph.search('last class setting', mode='semantic')
+        documents = self.provider.documents_seen
+        for marker in ('MODULE_SETTING', 'class Access:', 'METHOD_MARKER', 'TAIL_MARKER'):
+            self.assertEqual(sum(text.count(marker) for text in documents), 1, marker)
+        hit = result['results'][0]
+        self.assertEqual((hit['name'], hit['start']), ('Access', 5))
+        self.assertEqual(hit['body'].strip(), 'TAIL_MARKER = 2')
+
     def test_keyword_mode_needs_no_embedding_provider_and_reports_missing_setup(self):
         with patch('codemanager.embeddings.FastEmbedder', side_effect=EmbeddingError('missing dependency')):
             graph = Graph(self.root)

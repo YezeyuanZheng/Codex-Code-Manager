@@ -1,7 +1,9 @@
 """Local embeddings, incremental vector caching, and reciprocal rank fusion."""
 from contextlib import redirect_stdout
 import hashlib
+from heapq import heappop, heappush
 from importlib.metadata import PackageNotFoundError, version
+from itertools import groupby
 import math
 import os
 from pathlib import Path
@@ -92,20 +94,60 @@ def unpack(blob):
     return struct.unpack(f'<{len(blob)//4}f', blob)
 
 
-def passages(node):
-    """Embed all parts of a long symbol, rather than silently dropping its tail."""
+def owned_ranges(nodes):
+    """Assign each source line to the most specific searchable node."""
+    starts, boundaries = {}, set()
+    for node in nodes:
+        start, stop = node['start'], node['end'] + 1
+        if start >= stop:
+            continue
+        priority = (node['kind'] == 'chunk', stop - start, node['id'])
+        starts.setdefault(start, []).append((priority, stop))
+        boundaries.update((start, stop))
+    active, ranges = [], {}
+    points = sorted(boundaries)
+    for start, stop in zip(points, points[1:]):
+        for entry in starts.get(start, ()):
+            heappush(active, entry)
+        while active and active[0][1] <= start:
+            heappop(active)
+        if active:
+            owned = ranges.setdefault(active[0][0][2], [])
+            if owned and owned[-1][1] == start:
+                owned[-1] = owned[-1][0], stop
+            else:
+                owned.append((start, stop))
+    return ranges
+
+
+def passage_spans(node, ranges=None):
+    """Yield each contiguous passage with its original character offset."""
     header = f"{node['path']}\n{node['kind']} {node['name']}"[:400] + '\n'
     mapping = node['request_mapping'] if 'request_mapping' in node.keys() else '[]'
     if mapping != '[]':
         header += mapping + '\n'
     text = node['body']
+    spans = [(0, len(text))]
+    if ranges is not None and ranges != [(node['start'], node['end'] + 1)]:
+        offsets = [0]
+        for line in text.split('\n'):
+            offsets.append(offsets[-1] + len(line) + 1)
+        spans = [(offsets[start - node['start']], offsets[stop - node['start']] - 1)
+                 for start, stop in ranges]
+        spans = [(start, stop) for start, stop in spans if text[start:stop].strip()]
+    for start, stop in spans:
+        for offset in range(start, max(start + 1, stop), PASSAGE_CHARS):
+            body = text[offset:min(stop, offset + PASSAGE_CHARS)]
+            yield offset, header + body, body
+
+
+def passages(node):
     line = node['start']
-    for offset in range(0, max(1, len(text)), PASSAGE_CHARS):
-        body = text[offset:offset+PASSAGE_CHARS]
+    for _, text, body in passage_spans(node):
         start = line
         line += body.count('\n')
         end = min(line, node['end'])
-        yield header+body, start, end, body
+        yield text, start, end, body
 
 
 def sync_embeddings(graph, embedder, *, cache_db=None, progress=None):
@@ -113,11 +155,14 @@ def sync_embeddings(graph, embedder, *, cache_db=None, progress=None):
     model = embedder.identity
     cache = cache_db if cache_db is not None else graph.db
     # File previews repeat chunks or definitions; keep them out of dense retrieval.
-    nodes = graph.db.execute("SELECT * FROM nodes WHERE kind!='file' ORDER BY id").fetchall()
+    nodes = graph.db.execute("SELECT * FROM nodes WHERE kind!='file' ORDER BY path,id")
     expected = {}
-    for node in nodes:
-        for chunk, (text, _, _, _) in enumerate(passages(node)):
-            expected[(node['id'], chunk)] = (hashlib.sha256(text.encode()).hexdigest(), text)
+    for _, group in groupby(nodes, key=lambda node: node['path']):
+        file_nodes = list(group)
+        ranges = owned_ranges(file_nodes)
+        for node in file_nodes:
+            for chunk, (_, text, _) in enumerate(passage_spans(node, ranges.get(node['id'], []))):
+                expected[(node['id'], chunk)] = (hashlib.sha256(text.encode()).hexdigest(), text)
     rows = cache.execute('SELECT node_id,chunk,digest,vector FROM embeddings WHERE model=?', (model,)).fetchall()
     cached = {(row['node_id'], row['chunk']): row['digest'] for row in rows}
     by_digest = {row['digest']: row['vector'] for row in rows}

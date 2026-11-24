@@ -139,7 +139,7 @@ class CodeContextTests(unittest.TestCase):
             '        return 42\n'
         )
         self.graph.index()
-        result = self.graph.get_context(symbols=['Manager.start'], compact=True)
+        result = self.graph.get_context(symbols=['Manager.start'], compact=True, limit=1)
         self.assertEqual(result['called_symbols'], ['app.py:Manager._configure'])
         self.assertEqual(len(result['results']), 1)
         followup = self.graph.get_context(symbols=result['called_symbols'],

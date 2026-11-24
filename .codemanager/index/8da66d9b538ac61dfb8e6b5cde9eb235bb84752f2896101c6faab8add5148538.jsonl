@@ -1,0 +1,13 @@
+{"table":"files","values":["codemanager/python_chunks.py","ac5f8519a3b382bbb2fb06ec7fd4b721dd8b603026d06d9c94e3752df0c466a1"]}
+{"table":"nodes","values":["codemanager/python_chunks.py:1:codemanager/python_chunks.py","codemanager/python_chunks.py","codemanager/python_chunks.py","file",1,13,"[]"]}
+{"table":"nodes","values":["codemanager/python_chunks.py:1:module_1","codemanager/python_chunks.py","module_1","chunk",1,5,"[]"]}
+{"table":"nodes","values":["codemanager/python_chunks.py:6:module_ranges","codemanager/python_chunks.py","module_ranges","function",6,13,"[]"]}
+{"table":"edges","values":["codemanager/python_chunks.py:1:codemanager/python_chunks.py","codemanager/python_chunks.py:1:module_1","contains"]}
+{"table":"edges","values":["codemanager/python_chunks.py:1:codemanager/python_chunks.py","codemanager/python_chunks.py:6:module_ranges","contains"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","any","calls"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","len","calls"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","len","calls"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","max","calls"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","min","calls"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","range","calls"]}
+{"table":"refs","values":["codemanager/python_chunks.py:6:module_ranges","sorted","calls"]}
